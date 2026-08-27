@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+google-genai>=0.3.0
+pydantic>=2.0.0
+python-dotenv
+apscheduler
+requests
+beautifulsoup4

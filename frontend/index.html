@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Granite Design Advisor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+Thai:wght@400;500;600;700;900&family=Noto+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">Granite <span>Design</span> Advisor</div>
+  <nav class="tabs" id="tabs">
+    <button class="tab active" data-view="home">หน้าแรก</button>
+    <button class="tab" data-view="catalog">แคตตาล็อกหิน</button>
+    <button class="tab" data-view="compare">เปรียบเทียบ</button>
+    <button class="tab" data-view="advisor">AI Design Advisor</button>
+    <button class="tab" data-view="chat">AI Chat</button>
+    <button class="tab" data-view="price">คำนวณราคา</button>
+    <button class="tab" data-view="projects">โปรเจกต์ของฉัน</button>
+  </nav>
+  <span class="backend-status" id="backend-status" title="สถานะ backend">
+    <span class="dot" id="backend-status-dot"></span>
+    <span id="backend-status-text">กำลังตรวจสอบ backend...</span>
+  </span>
+</header>
+
+<main id="app">
+
+  <!-- ============ HOME / INSPIRATION ============ -->
+  <section class="view active" id="view-home">
+    <div class="hero">
+      <span class="eyebrow">Granite Design Advisor</span>
+      <h1>มีพื้นที่แบบนี้ งบเท่านี้ สไตล์นี้<br>ควรเลือกหินแกรนิตแบบไหน?</h1>
+      <p class="hero-sub">เว็บช่วยเลือกและออกแบบการตกแต่งบ้านด้วยหินแกรนิต — ไม่ใช่แค่บอกว่าหินดีหรือไม่ดี
+      แต่ช่วยจับคู่หินที่ใช่กับพื้นที่ งบประมาณ และสไตล์ของคุณ</p>
+    </div>
+
+    <div class="section-head" style="margin-top:3rem;">
+      <span class="eyebrow">🏠 Inspiration</span>
+      <h2>เลือกพื้นที่ที่กำลังตกแต่ง</h2>
+      <p>กดเข้าไปดูตัวอย่างว่าพื้นที่แบบนี้นิยมใช้หินแกรนิตแบบไหน</p>
+    </div>
+    <div class="insp-grid" id="insp-grid"></div>
+    <div class="insp-detail" id="insp-detail"></div>
+
+    <div class="section-head" style="margin-top:4.5rem;">
+      <span class="eyebrow">เริ่มต้นใช้งาน</span>
+      <h2>ฟีเจอร์หลักทั้งหมด</h2>
+    </div>
+    <div class="feature-grid">
+      <div class="feature-card" data-goto="catalog">
+        <span class="fnum">01</span>
+        <h3>🔎 Granite Catalog</h3>
+        <p>ข้อมูลหินแกรนิตแต่ละชนิด สี ลาย ราคา ความแข็ง การดูแลรักษา พร้อมตัวกรอง</p>
+      </div>
+      <div class="feature-card" data-goto="compare">
+        <span class="fnum">02</span>
+        <h3>⚖️ Compare Granite</h3>
+        <p>เลือกหิน 2–3 ชนิด เทียบกันเป็นตาราง ให้ตัดสินใจง่ายขึ้น</p>
+      </div>
+      <div class="feature-card" data-goto="advisor">
+        <span class="fnum">03</span>
+        <h3>🤖 AI Design Advisor</h3>
+        <p>ตอบคำถามสั้นๆ รับคำแนะนำหินที่เหมาะกับห้อง งบ และสไตล์ของคุณ</p>
+      </div>
+      <div class="feature-card" data-goto="chat">
+        <span class="fnum">04</span>
+        <h3>💬 AI Chat</h3>
+        <p>คุยกับ AI แบบเต็มรูปแบบ ขับเคลื่อนด้วย Gemini ผ่าน backend จริง</p>
+      </div>
+      <div class="feature-card" data-goto="price">
+        <span class="fnum">05</span>
+        <h3>🧮 Price Estimator</h3>
+        <p>กรอกความกว้าง × ความยาว คำนวณราคาจริงจากระบบ backend</p>
+      </div>
+      <div class="feature-card" data-goto="projects">
+        <span class="fnum">06</span>
+        <h3>❤️ Favorite / Project</h3>
+        <p>เก็บรูป Inspiration หินที่สนใจ ราคาประมาณ และผล AI ไว้ในโปรเจกต์ของคุณ</p>
+      </div>
+      <div class="feature-card" data-goto="catalog">
+        <span class="fnum">07</span>
+        <h3>🎨 Filter ตามสไตล์</h3>
+        <p>กรองตามสี และสไตล์ Modern / Minimal / Luxury / Classic</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CATALOG ============ -->
+  <section class="view" id="view-catalog">
+    <div class="section-head">
+      <span class="eyebrow">Granite Catalog</span>
+      <h2>แคตตาล็อกหินแกรนิต</h2>
+      <p>เลือกได้สูงสุด 3 ชนิดเพื่อนำไปเปรียบเทียบ (ติ๊กที่ช่อง "เลือกเปรียบเทียบ" บนการ์ด)</p>
+    </div>
+    <div class="filter-bar">
+      <select id="f-color">
+        <option value="">สี: ทั้งหมด</option>
+        <option value="black">⚫ ดำ</option>
+        <option value="white">⚪ ขาว</option>
+        <option value="brown">🟤 น้ำตาล</option>
+        <option value="green">🟢 เขียว</option>
+        <option value="blue">🔵 น้ำเงิน</option>
+        <option value="red">🔴 แดง</option>
+        <option value="grey">🔘 เทา</option>
+      </select>
+      <select id="f-style">
+        <option value="">สไตล์: ทั้งหมด</option>
+        <option value="Modern">Modern</option>
+        <option value="Minimal">Minimal</option>
+        <option value="Luxury">Luxury</option>
+        <option value="Classic">Classic</option>
+      </select>
+      <select id="f-area">
+        <option value="">พื้นที่ใช้งาน: ทั้งหมด</option>
+        <option value="kitchen">ห้องครัว</option>
+        <option value="bathroom">ห้องน้ำ</option>
+        <option value="livingroom">Living Room</option>
+        <option value="counter">Counter</option>
+        <option value="table">โต๊ะ</option>
+        <option value="wall">ผนัง</option>
+        <option value="floor">พื้น</option>
+        <option value="outdoor">Outdoor</option>
+      </select>
+      <select id="f-material">
+        <option value="">ประเภทหิน: ทั้งหมด</option>
+        <option value="granite">หินแกรนิต</option>
+        <option value="marble">หินอ่อน</option>
+      </select>
+    </div>
+    <div class="catalog-grid" id="catalog-grid"></div>
+  </section>
+
+  <!-- ============ COMPARE ============ -->
+  <section class="view" id="view-compare">
+    <div class="section-head">
+      <span class="eyebrow">⚖️ Compare Granite</span>
+      <h2>เปรียบเทียบหิน</h2>
+      <p>เลือกหิน 2–3 ชนิดจากแคตตาล็อก แล้วเทียบเป็นตารางเพื่อช่วยให้ตัดสินใจง่ายขึ้น</p>
+    </div>
+    <div id="compare-empty" class="history-empty">ยังไม่ได้เลือกหิน — ไปที่เมนู "แคตตาล็อกหิน" แล้วติ๊กเลือกหิน 2–3 ชนิดก่อนครับ</div>
+    <div id="compare-wrap" style="display:none;">
+      <div class="compare-chips" id="compare-chips"></div>
+      <div class="table-scroll">
+        <table class="compare-table" id="compare-table"></table>
+      </div>
+      <button class="btn-ghost" id="clear-compare" style="margin-top:1.2rem;">ล้างการเลือกทั้งหมด</button>
+    </div>
+  </section>
+
+  <!-- ============ AI ADVISOR ============ -->
+  <section class="view" id="view-advisor">
+    <div class="section-head">
+      <span class="eyebrow">🤖 AI Design Advisor</span>
+      <h2>ให้ AI ช่วยแนะนำหินที่ใช่</h2>
+      <p>ตอบคำถาม 4 ข้อ ระบบจะให้คะแนนหินแต่ละชนิดและแนะนำ 3 อันดับแรก พร้อมเหตุผล</p>
+    </div>
+    <form id="advisor-form" class="recommend-form">
+      <div class="rq">
+        <label>ห้อง / พื้นที่</label>
+        <select name="area">
+          <option value="kitchen">ห้องครัว</option>
+          <option value="bathroom">ห้องน้ำ</option>
+          <option value="livingroom">Living Room</option>
+          <option value="counter">Counter</option>
+          <option value="table">โต๊ะ</option>
+          <option value="wall">ผนัง</option>
+          <option value="floor">พื้น</option>
+          <option value="outdoor">Outdoor</option>
+        </select>
+      </div>
+      <div class="rq">
+        <label>งบประมาณต่อตารางเมตร (บาท)</label>
+        <select name="budget">
+          <option value="1500">ไม่เกิน 1,500</option>
+          <option value="3000">1,500 - 3,000</option>
+          <option value="6000">3,000 - 6,000</option>
+          <option value="99999">มากกว่า 6,000</option>
+        </select>
+      </div>
+      <div class="rq">
+        <label>สไตล์ที่ชอบ</label>
+        <select name="style">
+          <option value="Modern">Modern</option>
+          <option value="Minimal">Minimal</option>
+          <option value="Luxury">Luxury</option>
+          <option value="Classic">Classic</option>
+        </select>
+      </div>
+      <div class="rq">
+        <label>สีที่ชอบ</label>
+        <select name="color">
+          <option value="black">⚫ ดำ</option>
+          <option value="white">⚪ ขาว</option>
+          <option value="brown">🟤 น้ำตาล</option>
+          <option value="green">🟢 เขียว</option>
+          <option value="blue">🔵 น้ำเงิน</option>
+          <option value="red">🔴 แดง</option>
+          <option value="grey">🔘 เทา</option>
+        </select>
+      </div>
+      <button type="submit" class="btn-primary">รับคำแนะนำ</button>
+    </form>
+    <div class="recommend-result" id="advisor-result"></div>
+  </section>
+
+  <!-- ============ AI CHAT (real backend) ============ -->
+  <section class="view" id="view-chat">
+    <div class="section-head">
+      <span class="eyebrow">🤖 AI Chat</span>
+      <h2>คุยกับผู้ช่วย AI แบบเต็มรูปแบบ</h2>
+      <p>ขับเคลื่อนด้วย Gemini ผ่าน backend จริง — AI จะอ่านรายการหินทั้งหมดในระบบแล้วแนะนำโดยอ้างอิงชื่อและราคาจริง
+      ลองถามอะไรก็ได้ เช่น "อยากได้หินสีดำสำหรับท็อปครัว งบไม่เกิน 2,500 บาท/ตร.ม."</p>
+    </div>
+    <div class="chat-box">
+      <div class="chat-log" id="chat-log"></div>
+      <form id="chat-form" class="chat-input-row">
+        <input type="text" id="chat-input" placeholder="พิมพ์คำถามเกี่ยวกับหิน..." autocomplete="off">
+        <button type="submit" class="btn-primary">ส่ง</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- ============ PRICE ============ -->
+  <section class="view" id="view-price">
+    <div class="section-head">
+      <span class="eyebrow">🧮 Price Estimator</span>
+      <h2>คำนวณราคาโดยประมาณ</h2>
+      <p>กรอกความกว้าง × ความยาวของพื้นที่ เลือกหิน ระบบจะคำนวณปริมาณและราคาให้ทันที</p>
+    </div>
+    <form id="price-form" class="price-form">
+      <div class="rq">
+        <label>เลือกหิน</label>
+        <select name="stoneId" id="price-stone-select"></select>
+      </div>
+      <div class="rq"></div>
+      <div class="rq">
+        <label>ความกว้าง (เมตร)</label>
+        <input type="number" name="width" min="0.1" step="0.1" value="2" required>
+      </div>
+      <div class="rq">
+        <label>ความยาว (เมตร)</label>
+        <input type="number" name="length" min="0.1" step="0.1" value="2" required>
+      </div>
+      <div class="rq">
+        <label>ผิวสัมผัส</label>
+        <select name="finish">
+          <option value="1">ขัดเงา (Polished) — ราคาปกติ</option>
+          <option value="1.1">ผิวด้าน (Honed) — +10%</option>
+          <option value="1.2">ผิวหยาบ (Leathered) — +20%</option>
+        </select>
+      </div>
+      <div class="rq">
+        <label>ค่าติดตั้ง (บาท/ตร.ม.)</label>
+        <input type="number" name="install" min="0" step="10" value="350">
+      </div>
+      <button type="submit" class="btn-primary">คำนวณราคา</button>
+    </form>
+    <div class="price-result" id="price-result"></div>
+  </section>
+
+  <!-- ============ PROJECTS / FAVORITES ============ -->
+  <section class="view" id="view-projects">
+    <div class="section-head">
+      <span class="eyebrow">❤️ Favorite / Project</span>
+      <h2>โปรเจกต์ของฉัน</h2>
+      <p>สร้างโปรเจกต์ (เช่น "My Kitchen") แล้วเก็บ Inspiration, หินที่สนใจ, ราคาประมาณ และผล AI Advisor ไว้ในที่เดียว</p>
+    </div>
+
+    <form id="new-project-form" class="new-project-row">
+      <input type="text" id="new-project-name" placeholder="ตั้งชื่อโปรเจกต์ใหม่ เช่น My Kitchen" required>
+      <button type="submit" class="btn-primary">+ สร้างโปรเจกต์</button>
+    </form>
+
+    <div class="active-project-note" id="active-project-note"></div>
+
+    <div class="project-list" id="project-list"></div>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <div>© Granite Design Advisor</div>
+  <div class="mono" id="footer-status">พร้อมใช้งาน</div>
+</footer>
+
+<div class="music-widget" id="music-widget">
+  <audio id="bg-music" src="assets/theme-song.mp3" loop preload="auto"></audio>
+  <button id="music-toggle" class="music-btn" type="button" aria-label="เปิด/ปิดเพลงพื้นหลัง" title="เพลงพื้นหลัง">
+    <span id="music-icon">🔇</span>
+  </button>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

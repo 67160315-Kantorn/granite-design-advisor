@@ -1,0 +1,25 @@
+# ===== ห้าม commit ขึ้น git เด็ดขาด (มีความลับ/ข้อมูลเฉพาะเครื่อง) =====
+.env
+backend/.env
+venv/
+backend/venv/
+.venv/
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+
+# ===== IDE / Editor =====
+.vscode/
+.idea/
+*.swp
+
+# ===== OS junk =====
+.DS_Store
+Thumbs.db
+
+# ===== Logs =====
+*.log
