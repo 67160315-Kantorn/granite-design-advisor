@@ -12,7 +12,9 @@ main.py — จุดเริ่มต้นของ Granite Design Advisor ba
 import logging
 import os
 from pathlib import Path
-
+from routers.Auth import router as auth_router
+from routers.Users import router as users_router
+from routers.Projects import router as projects_router
 from dotenv import load_dotenv
 # override=True: ค่าใน .env ต้อง "ชนะ" เสมอ แม้เครื่องจะมี environment variable ชื่อเดียวกัน
 # (เช่น GEMINI_API_KEY, GOOGLE_API_KEY) ค้างอยู่จากการตั้งค่าครั้งก่อนๆ ก็ตาม — ค่า default ของ
@@ -51,8 +53,9 @@ if allowed_origins:
 # --- API routers (ต้อง include ก่อน mount static ที่ "/" ด้านล่าง) ---
 app.include_router(chat_router)
 app.include_router(estimate_router)
-
-
+app.include_router(auth_router)
+app.include_router(users_router)
+app.include_router(projects_router)
 @app.on_event("startup")
 def on_startup():
     if not os.environ.get("GEMINI_API_KEY"):
