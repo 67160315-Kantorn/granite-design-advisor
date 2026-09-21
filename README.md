@@ -1,3 +1,5 @@
+67160315 กันต์ธร ใจใหญ่ sec1
+67160372 ศุภวิชญ์ จิตรดี sec1
 # Granite Design Advisor — Full-Stack (พร้อมรัน local)
 
 โครงสร้างโปรเจกต์:
