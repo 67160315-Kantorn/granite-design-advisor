@@ -15,6 +15,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import func as sa_func
+from sqlalchemy import or_, text
 
 _project_root = Path(__file__).resolve().parent.parent
 if str(_project_root) not in sys.path:
@@ -52,20 +53,67 @@ def _get_db_session() -> Session:
 
 @router.get("/granite-products", response_model=List[GraniteProductResponse])
 def list_products(
+    q: Optional[str] = Query(None, description="คำค้นหาอิสระ เช่น ชื่อหินหรือคำบรรยาย (รองรับทั้งอังกฤษและไทย)"),
     color: Optional[str] = Query(None, description="เช่น black, white, brown, green, blue, red, grey"),
     style: Optional[str] = Query(None, description="เช่น Modern, Minimal, Luxury, Classic"),
     area: Optional[str] = Query(None, description="เช่น kitchen, bathroom, counter"),
     material: Optional[str] = Query(None, description="granite หรือ marble"),
+    min_price: Optional[float] = Query(None, description="ราคาต่ำสุด (บาท/ตร.ม.)"),
+    max_price: Optional[float] = Query(None, description="ราคาสูงสุด (บาท/ตร.ม.) — ใช้คู่กับงบประมาณที่ลูกค้าระบุ"),
 ):
     """รายการหินทั้งหมด กรองได้หลายเงื่อนไขพร้อมกัน (ใส่ query param ไหนก็กรองตามนั้น)"""
     db = _get_db_session()
     try:
         query = db.query(GraniteProduct)
+
+        search_term = q.strip() if q else None
+        fulltext_clause = None
+        if search_term:
+            # Hybrid search — ตั้งใจออกแบบแบบนี้ ไม่ใช่ FULLTEXT ล้วนๆ:
+            # MySQL FULLTEXT (NATURAL LANGUAGE MODE) ใช้ idx_fulltext_search ได้ผลดีมากกับ
+            # ชื่อหินภาษาอังกฤษ (คั่นด้วยช่องว่างปกติ ให้คะแนน relevance ที่มีความหมาย) แต่
+            # "ใช้ไม่ได้เลย" กับคำค้นภาษาไทย เพราะ parser มาตรฐานของ MySQL ตัดคำโดยอาศัย
+            # ช่องว่างระหว่างคำ ซึ่งภาษาไทยไม่มี (ทดสอบจริงแล้ว: ค้นคำไทยด้วย FULLTEXT ล้วนๆ
+            # คืนผลเป็น 0 แถวเสมอ) จึง OR เพิ่ม LIKE '%...%' เป็น fallback ให้คำค้นภาษาไทย
+            # หาเจอได้ด้วย (เคยลอง FULLTEXT ... WITH PARSER ngram แล้วด้วย แต่ default
+            # ngram_token_size=2 ทำให้แทบทุกแถวแมตช์หมดแบบไม่เลือกเลย ไม่ใช้งานจริงได้)
+            like_pattern = f"%{search_term}%"
+            fulltext_clause = text(
+                "MATCH(product_title, product_description) AGAINST (:search_term IN NATURAL LANGUAGE MODE)"
+            ).bindparams(search_term=search_term)
+            query = query.filter(
+                or_(
+                    fulltext_clause,
+                    GraniteProduct.product_title.like(like_pattern),
+                    GraniteProduct.product_description.like(like_pattern),
+                )
+            )
+
         if color:
             query = query.filter(GraniteProduct.color == color)
         if material:
             query = query.filter(GraniteProduct.material == material)
-        products = query.order_by(GraniteProduct.id).all()
+        # min_price/max_price กรองที่ระดับ SQL (ใช้ idx_price) ต่างจาก style/area ที่กรอง
+        # ใน Python ทีหลัง เพราะราคาเป็นคอลัมน์ตัวเลขธรรมดา ไม่ใช่ JSON array
+        if min_price is not None:
+            query = query.filter(GraniteProduct.product_price >= min_price)
+        if max_price is not None:
+            query = query.filter(GraniteProduct.product_price <= max_price)
+
+        if search_term:
+            # เรียงตาม relevance ก่อน (คำค้นภาษาอังกฤษที่ตรงที่สุดจะขึ้นบนสุด) คำค้นภาษาไทย
+            # ที่หาเจอผ่าน LIKE อย่างเดียวจะมี relevance=0 เรียงตามชื่อ A-Z แทน
+            # หมายเหตุ: TextClause (จาก text()) ไม่มีเมธอด .desc() ให้ใช้เหมือน Column ปกติ
+            # ต้องใส่ DESC เข้าไปใน SQL ดิบตรงๆ แทน (ใช้ชื่อ bind param แยกจาก fulltext_clause
+            # ข้างบน กันตัวแปรชนกันตอน SQLAlchemy ประกอบ query สุดท้าย)
+            relevance_order = text(
+                "MATCH(product_title, product_description) "
+                "AGAINST (:search_term_order IN NATURAL LANGUAGE MODE) DESC"
+            ).bindparams(search_term_order=search_term)
+            query = query.order_by(relevance_order, GraniteProduct.product_title.asc())
+        else:
+            query = query.order_by(GraniteProduct.id)
+        products = query.all()
 
         # style / area เก็บเป็น JSON array ใน MySQL — กรองแบบ "อยู่ใน list ไหม" ทำง่ายสุด
         # ด้วย Python หลัง query กลับมาแล้ว (ข้อมูลแค่ ~24 ชิ้น ไม่กระทบ performance)

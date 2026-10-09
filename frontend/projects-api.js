@@ -9,9 +9,8 @@
    วิธีใช้: เพิ่ม <script src="projects-api.js"></script> ต่อท้าย
    <script src="auth.js"></script> ใน index.html (ต้องมาหลังสุด)
 
-   ข้อจำกัดที่ตั้งใจตัดออกไปก่อน (ยังไม่ได้ย้ายมาในเวอร์ชันนี้):
-   - ปุ่ม "Export PDF" ของแต่ละโปรเจกต์ที่เคยมี — เพราะโครงสร้างข้อมูลจาก API
-     ต่างจาก localStorage เดิมเล็กน้อย รอทำเป็นขั้นถัดไปได้ถ้าต้องการ
+   รวม Export PDF ของแต่ละโปรเจกต์ไว้แล้ว (กู้คืนจากเวอร์ชัน localStorage เดิม ปรับให้ดึง
+   ข้อมูลจาก API จริงแทน ต้องใช้คู่กับ backend ที่คืนฟิลด์ created_at ในแต่ละ item ด้วย)
    ========================================================== */
 (function () {
   // หมายเหตุสำคัญ: API_BASE ใน app.js ประกาศด้วย const ที่ top-level ของ <script> tag
@@ -93,6 +92,51 @@
   }
   window.deleteProject = deleteProject;
 
+  async function exportProjectPDF(projectId) {
+    let detail;
+    try {
+      detail = await apiRequest(`/projects/${projectId}`);
+    } catch (err) {
+      alert("โหลดข้อมูลโปรเจกต์ไม่สำเร็จ: " + err.message);
+      return;
+    }
+    if (typeof window.jspdf === "undefined" || !window.jspdf.jsPDF) {
+      alert("ไม่พบไลบรารี jsPDF กรุณารีเฟรชหน้าเว็บแล้วลองอีกครั้ง");
+      return;
+    }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+
+    doc.setFontSize(16);
+    doc.text(detail.name, 14, 20);
+    doc.setFontSize(10);
+    doc.setTextColor(120);
+    doc.text("Granite Design Advisor \u2014 \u0e2a\u0e23\u0e38\u0e1b\u0e42\u0e1b\u0e23\u0e40\u0e08\u0e01\u0e15\u0e4c", 14, 27);
+
+    let y = 40;
+    if (detail.items.length === 0) {
+      doc.setFontSize(10);
+      doc.setTextColor(0);
+      doc.text("ยังไม่มีรายการในโปรเจกต์นี้", 14, y);
+    }
+    detail.items.forEach((item) => {
+      const dateStr = item.created_at ? new Date(item.created_at).toLocaleDateString("th-TH") : "";
+      doc.setFontSize(9);
+      doc.setTextColor(150);
+      doc.text("[" + (KIND_LABEL[item.kind] || item.kind) + "] " + dateStr, 14, y);
+      y += 5;
+      doc.setFontSize(11);
+      doc.setTextColor(20);
+      const lines = doc.splitTextToSize(item.title, 180);
+      doc.text(lines, 14, y);
+      y += lines.length * 6 + 4;
+      if (y > 275) { doc.addPage(); y = 20; }
+    });
+
+    doc.save(detail.name.replace(/\s+/g, "_") + ".pdf");
+  }
+  window.exportProjectPDF = exportProjectPDF;
+
   async function deleteProjectItem(projectId, itemId) {
     try {
       await apiRequest(`/projects/${projectId}/items/${itemId}`, { method: "DELETE" });
@@ -154,6 +198,7 @@
           </div>
           <div class="project-actions">
             ${p.id !== activeId ? `<button class="btn-small" onclick="setActiveProjectId(${p.id})">ตั้งเป็นโปรเจกต์ปัจจุบัน</button>` : ""}
+            <button class="btn-small" onclick="exportProjectPDF(${p.id})">Export PDF</button>
             <button class="btn-small" onclick="deleteProject(${p.id})">ลบโปรเจกต์</button>
           </div>
         </div>

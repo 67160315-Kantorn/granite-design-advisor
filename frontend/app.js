@@ -415,22 +415,86 @@ document.getElementById("advisor-form").addEventListener("submit", (e)=>{
 const chatLog = document.getElementById("chat-log");
 const chatForm = document.getElementById("chat-form");
 const chatInput = document.getElementById("chat-input");
-let chatHistory = []; // {role:"user"|"assistant", content:"..."}
+let chatHistory = []; // {role:"user"|"assistant", content:"..." หรือ [{type:"text",...},{type:"image_url",...}]}
 
-function addMsg(text, who){
+function addMsg(text, who, imageDataUrl){
   const div = document.createElement("div");
   div.className = "msg " + who;
-  div.textContent = text;
+  if(imageDataUrl){
+    // มีรูปแนบมาด้วย: ใส่รูปก่อน แล้วค่อยใส่ข้อความแยกเป็น div ย่อย
+    const img = document.createElement("img");
+    img.src = imageDataUrl;
+    img.className = "msg-attached-image";
+    div.appendChild(img);
+    const textDiv = document.createElement("div");
+    textDiv.textContent = text;
+    div.appendChild(textDiv);
+  } else {
+    div.textContent = text; // พฤติกรรมเดิมเป๊ะ เมื่อไม่มีรูป (ข้อความล้วน)
+  }
   chatLog.appendChild(div);
   chatLog.scrollTop = chatLog.scrollHeight;
   return div;
 }
 
+/* ---------- แนบรูปภาพ (ถ่ายรูปห้อง/พื้นที่ ให้ AI แนะนำหินที่เข้ากัน) ---------- */
+const chatImageInput = document.getElementById("chat-image-input");
+const chatImageBtn = document.getElementById("chat-image-btn");
+const chatImagePreview = document.getElementById("chat-image-preview");
+const chatImagePreviewImg = document.getElementById("chat-image-preview-img");
+const chatImageRemoveBtn = document.getElementById("chat-image-remove-btn");
+
+let selectedImageDataUrl = null; // base64 data URL ของรูปที่เลือกไว้ (ยังไม่ส่ง)
+const MAX_CHAT_IMAGE_BYTES = 8 * 1024 * 1024; // 8MB
+
+chatImageBtn.addEventListener("click", () => chatImageInput.click());
+
+chatImageInput.addEventListener("change", () => {
+  const file = chatImageInput.files[0];
+  if(!file) return;
+  if(!file.type.startsWith("image/")){
+    alert("กรุณาเลือกไฟล์รูปภาพเท่านั้น");
+    chatImageInput.value = "";
+    return;
+  }
+  if(file.size > MAX_CHAT_IMAGE_BYTES){
+    alert("ไฟล์รูปใหญ่เกินไป กรุณาเลือกไฟล์ไม่เกิน 8MB");
+    chatImageInput.value = "";
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    selectedImageDataUrl = reader.result;
+    chatImagePreviewImg.src = selectedImageDataUrl;
+    chatImagePreview.style.display = "flex";
+  };
+  reader.onerror = () => {
+    alert("อ่านไฟล์รูปไม่สำเร็จ ลองใหม่อีกครั้ง");
+  };
+  reader.readAsDataURL(file);
+});
+
+function clearSelectedChatImage(){
+  selectedImageDataUrl = null;
+  chatImageInput.value = "";
+  chatImagePreview.style.display = "none";
+}
+chatImageRemoveBtn.addEventListener("click", clearSelectedChatImage);
+
 addMsg("สวัสดีครับ ผมเป็นผู้ช่วย AI ของ Granite Design Advisor (ขับเคลื่อนด้วย Gemini) ถามเรื่องหินแกรนิต/หินอ่อนในระบบได้เลยครับ", "bot");
 
-async function sendChatMessage(userText){
-  addMsg(userText, "user");
-  chatHistory.push({ role:"user", content:userText });
+async function sendChatMessage(userText, imageDataUrl){
+  addMsg(userText || "(ส่งรูปภาพ)", "user", imageDataUrl);
+
+  // ถ้ามีรูปแนบมา ต้องส่ง content เป็น list แบบ multi-part (text + image_url) ตามที่ backend
+  // รองรับไว้อยู่แล้ว (ดู Chat.py: _messages_to_genai) ถ้าไม่มีรูป ส่งเป็น string ธรรมดาเหมือนเดิมทุกอย่าง
+  const userContent = imageDataUrl
+    ? [
+        { type:"text", text: userText || "ช่วยดูรูปนี้แล้วแนะนำหินแกรนิต/หินอ่อนที่เข้ากันหน่อยครับ" },
+        { type:"image_url", image_url:{ url: imageDataUrl } },
+      ]
+    : userText;
+  chatHistory.push({ role:"user", content: userContent });
 
   const botEl = addMsg("...", "bot");
   const submitBtn = chatForm.querySelector("button[type=submit]");
@@ -521,9 +585,11 @@ async function sendChatMessage(userText){
 chatForm.addEventListener("submit", (e)=>{
   e.preventDefault();
   const text = chatInput.value.trim();
-  if(!text) return;
+  const imageToSend = selectedImageDataUrl;
+  if(!text && !imageToSend) return; // ต้องมีอย่างน้อยข้อความหรือรูปอย่างใดอย่างหนึ่ง
   chatInput.value = "";
-  sendChatMessage(text);
+  clearSelectedChatImage();
+  sendChatMessage(text, imageToSend);
 });
 
 /* ==========================================================

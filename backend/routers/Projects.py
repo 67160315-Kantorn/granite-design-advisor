@@ -12,6 +12,7 @@ API Projects: "โปรเจกต์ของฉัน" ผูกกับบ
 - DELETE /projects/{id}/items/{item_id}   — ลบรายการออกจากโปรเจกต์
 """
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any, List, Optional
 
@@ -50,6 +51,7 @@ class ProjectItemResponse(BaseModel):
     kind: str
     title: str
     detail: Optional[Any] = None
+    created_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
 

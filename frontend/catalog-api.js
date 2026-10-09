@@ -1,12 +1,19 @@
 /* ==========================================================
    catalog-api.js — โหลดแคตตาล็อกหินจาก backend (MySQL) แทนที่ข้อมูลฝังในเว็บ
+   + ค้นหาอิสระ (Full-Text Search) ผ่านช่องค้นหาในหน้าแคตตาล็อก
 
    วิธีใช้: เพิ่ม <script src="catalog-api.js"></script> ต่อท้าย <script src="app.js"></script>
    ใน index.html (ลำดับก่อน/หลัง auth.js กับ projects-api.js ไม่สำคัญ)
 
-   หลักการ: GRANITE_CATALOG ใน app.js ประกาศด้วย const เปลี่ยนทั้งตัวแปรไม่ได้ แต่ "เนื้อหา"
-   ข้างในอาร์เรย์แก้ไขได้ปกติ — ไฟล์นี้จะดึงข้อมูลจริงจาก /granite-products มาแทนที่เนื้อหา
-   เดิมทั้งหมด แล้วสั่ง render ใหม่ให้ตรงกับข้อมูลจาก backend ทันที
+   หลักการโหลดแคตตาล็อก: GRANITE_CATALOG ใน app.js ประกาศด้วย const เปลี่ยนทั้งตัวแปรไม่ได้
+   แต่ "เนื้อหา" ข้างในอาร์เรย์แก้ไขได้ปกติ — ไฟล์นี้จะดึงข้อมูลจริงจาก /granite-products
+   มาแทนที่เนื้อหาเดิมทั้งหมด แล้วสั่ง render ใหม่ให้ตรงกับข้อมูลจาก backend ทันที
+
+   หลักการค้นหา: ช่อง #f-search (ถ้ามีในหน้า) ยิง GET /granite-products?q=...&color=...&... ไป
+   backend ทุกครั้งที่พิมพ์ (debounce 350ms กันยิง API รัวๆ ทุกตัวอักษร) รวมกับค่า dropdown
+   filter ที่เลือกอยู่ ณ ขณะนั้นด้วย — ผลลัพธ์ที่ได้มาแทนที่ GRANITE_CATALOG แล้ว render ใหม่
+   เหมือนกับตอนโหลดครั้งแรก (dropdown listener เดิมใน app.js ยังทำงานคู่กันได้ตามปกติ เพราะ
+   แค่ re-filter เนื้อหาที่อัปเดตแล้วซ้ำอีกชั้น ไม่ขัดแย้งกัน)
 
    ถ้าเชื่อมต่อ backend ไม่ได้ (เช่น server ยังไม่รัน) จะ "ไม่ทำอะไรเลย" ปล่อยให้เว็บใช้ข้อมูล
    สำรองที่ฝังไว้ใน app.js ต่อไปตามปกติ ไม่ทำให้เว็บพังหรือแคตตาล็อกว่างเปล่า
@@ -20,29 +27,8 @@
   // ตั้งชื่อตัวแปรของไฟล์นี้เป็น _API_BASE (ไม่ใช่ API_BASE) เพื่อไม่ให้ชื่อชนกับของ app.js
   const _API_BASE = (typeof API_BASE !== "undefined") ? API_BASE : "";
 
-  async function loadCatalogFromAPI() {
-    let data;
-    try {
-      const res = await fetch(_API_BASE + "/granite-products");
-      if (!res.ok) throw new Error("status " + res.status);
-      data = await res.json();
-    } catch (err) {
-      console.warn("โหลดแคตตาล็อกจาก backend ไม่สำเร็จ ใช้ข้อมูลสำรองที่ฝังไว้ในเว็บแทน:", err.message);
-      return;
-    }
-
-    // สำคัญ: GRANITE_CATALOG ใน app.js ประกาศด้วย const ที่ top-level ของ <script> tag —
-    // ค่าแบบนี้ "ไม่" กลายเป็น window.GRANITE_CATALOG โดยอัตโนมัติ (ต่างจาก var หรือ function
-    // declaration) แต่เบราว์เซอร์แชร์ scope นี้ข้าม <script> tag ให้อัตโนมัติ เลยอ้างอิงถึงมัน
-    // ได้ตรงๆ ด้วยชื่อตัวแปรเฉยๆ (ไม่ต้องมี window. นำหน้า) ตราบใดที่ catalog-api.js ถูกโหลด
-    // เป็น <script src="..."> ทีหลัง app.js ใน index.html จริง — ใช้ typeof เช็คก่อนเพราะ
-    // การอ้างอิงตัวแปรที่ไม่มีอยู่จริงตรงๆ (ไม่ผ่าน typeof) จะทำให้ error ทันที
-    if (typeof GRANITE_CATALOG === "undefined" || !Array.isArray(GRANITE_CATALOG)) {
-      console.warn("ไม่พบตัวแปร GRANITE_CATALOG ใน app.js — ข้ามการอัปเดตแคตตาล็อก");
-      return;
-    }
-
-    const mapped = data.map((p) => ({
+  function mapApiProductsToCatalog(data) {
+    return data.map((p) => ({
       id: String(p.id),
       name: p.product_title,
       material: p.material,
@@ -55,9 +41,21 @@
       rating: p.rating || { price: 3, durability: 3, maintenance: 3, modern: 3, luxury: 3 },
       image: p.image_url,
     }));
+  }
 
-    // เคลียร์เนื้อหาเก่าทิ้งแล้วใส่ของใหม่จาก backend แทน (ไม่ได้ reassign ตัวแปร แค่แก้เนื้อหาข้างใน
-    // ของอาร์เรย์เดิม ซึ่งทำได้ปกติแม้ตัวแปรจะประกาศด้วย const ก็ตาม)
+  function applyCatalogData(mapped) {
+    // สำคัญ: GRANITE_CATALOG ใน app.js ประกาศด้วย const ที่ top-level ของ <script> tag —
+    // ค่าแบบนี้ "ไม่" กลายเป็น window.GRANITE_CATALOG โดยอัตโนมัติ (ต่างจาก var หรือ function
+    // declaration) แต่เบราว์เซอร์แชร์ scope นี้ข้าม <script> tag ให้อัตโนมัติ เลยอ้างอิงถึงมัน
+    // ได้ตรงๆ ด้วยชื่อตัวแปรเฉยๆ (ไม่ต้องมี window. นำหน้า) ตราบใดที่ catalog-api.js ถูกโหลด
+    // เป็น <script src="..."> ทีหลัง app.js ใน index.html จริง — ใช้ typeof เช็คก่อนเพราะ
+    // การอ้างอิงตัวแปรที่ไม่มีอยู่จริงตรงๆ (ไม่ผ่าน typeof) จะทำให้ error ทันที
+    if (typeof GRANITE_CATALOG === "undefined" || !Array.isArray(GRANITE_CATALOG)) {
+      console.warn("ไม่พบตัวแปร GRANITE_CATALOG ใน app.js — ข้ามการอัปเดตแคตตาล็อก");
+      return false;
+    }
+    // เคลียร์เนื้อหาเก่าทิ้งแล้วใส่ของใหม่จาก backend แทน (ไม่ได้ reassign ตัวแปร แค่แก้เนื้อหา
+    // ข้างในของอาร์เรย์เดิม ซึ่งทำได้ปกติแม้ตัวแปรจะประกาศด้วย const ก็ตาม)
     GRANITE_CATALOG.length = 0;
     mapped.forEach((item) => GRANITE_CATALOG.push(item));
 
@@ -69,8 +67,76 @@
         .map((s) => `<option value="${s.id}">${s.name} (฿${s.price.toLocaleString()}/ตร.ม.)</option>`)
         .join("");
     }
+    return true;
+  }
 
-    console.log("โหลดแคตตาล็อกจาก backend สำเร็จ:", mapped.length, "ชนิด");
+  async function loadCatalogFromAPI() {
+    let data;
+    try {
+      const res = await fetch(_API_BASE + "/granite-products");
+      if (!res.ok) throw new Error("status " + res.status);
+      data = await res.json();
+    } catch (err) {
+      console.warn("โหลดแคตตาล็อกจาก backend ไม่สำเร็จ ใช้ข้อมูลสำรองที่ฝังไว้ในเว็บแทน:", err.message);
+      return;
+    }
+    const mapped = mapApiProductsToCatalog(data);
+    if (applyCatalogData(mapped)) {
+      console.log("โหลดแคตตาล็อกจาก backend สำเร็จ:", mapped.length, "ชนิด");
+    }
+  }
+
+  /* ---------- ค้นหาอิสระ (Full-Text Search) ---------- */
+  const searchInput = document.getElementById("f-search");
+  let searchDebounceTimer = null;
+
+  function currentDropdownFilters() {
+    const get = (id) => {
+      const el = document.getElementById(id);
+      return el ? el.value : "";
+    };
+    return {
+      color: get("f-color"),
+      style: get("f-style"),
+      area: get("f-area"),
+      material: get("f-material"),
+    };
+  }
+
+  async function performCatalogSearch() {
+    const q = searchInput.value.trim();
+    const filters = currentDropdownFilters();
+
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    if (filters.color) params.set("color", filters.color);
+    if (filters.style) params.set("style", filters.style);
+    if (filters.area) params.set("area", filters.area);
+    if (filters.material) params.set("material", filters.material);
+
+    let data;
+    try {
+      const res = await fetch(_API_BASE + "/granite-products?" + params.toString());
+      if (!res.ok) throw new Error("status " + res.status);
+      data = await res.json();
+    } catch (err) {
+      console.warn("ค้นหาไม่สำเร็จ:", err.message);
+      return;
+    }
+    applyCatalogData(mapApiProductsToCatalog(data));
+  }
+
+  if (searchInput) {
+    searchInput.addEventListener("input", () => {
+      clearTimeout(searchDebounceTimer);
+      searchDebounceTimer = setTimeout(performCatalogSearch, 350);
+    });
+    // ให้ dropdown filter เดิมใน app.js ยิงค้นหาผ่าน backend ด้วย (นอกเหนือจากที่ app.js
+    // เอง re-filter ฝั่ง client อยู่แล้ว) เพื่อให้ผลลัพธ์รวม q + dropdown ถูกต้องตรงกันเสมอ
+    ["f-color", "f-style", "f-area", "f-material"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener("change", performCatalogSearch);
+    });
   }
 
   loadCatalogFromAPI();

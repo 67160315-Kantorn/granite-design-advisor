@@ -9,6 +9,26 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+Thai:wght@400;500;600;700;900&family=Noto+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  /* ---- AI Chat: แนบรูปภาพ (ถ่ายรูปห้อง/พื้นที่ ให้ AI แนะนำหินที่เข้ากัน) ---- */
+  .chat-attach-btn{background:none; border:1px solid var(--rule,#444); color:var(--marble-white-dim,#ccc);
+    font-size:1.1rem; padding:0.5rem 0.7rem; cursor:pointer; border-radius:4px; line-height:1;}
+  .chat-attach-btn:hover{border-color:var(--vein-gold-bright,#d9ad5c);}
+  .chat-image-preview{display:none; align-items:center; gap:0.6rem; padding:0.5rem 0.8rem;
+    background:var(--stone-black,#111); border-top:1px solid var(--rule,#333);}
+  .chat-image-preview img{height:50px; width:50px; object-fit:cover; border-radius:4px; border:1px solid var(--rule,#444);}
+  .chat-image-preview span{font-size:0.78rem; color:var(--stone-gray,#998); flex:1;}
+  .chat-image-preview button{background:none; border:1px solid var(--warn,#d99a7c); color:var(--warn,#d99a7c);
+    width:24px; height:24px; border-radius:50%; cursor:pointer; font-size:0.8rem; line-height:1; flex-shrink:0;}
+  .msg-attached-image{max-width:220px; max-height:220px; border-radius:6px; margin-bottom:0.4rem; display:block;
+    border:1px solid var(--rule,#444);}
+
+  /* ---- Catalog: ค้นหาอิสระ (Full-Text Search ผ่าน backend) ---- */
+  .search-input{background:var(--stone-black,#111); border:1px solid var(--rule,#444);
+    color:var(--marble-white,#eee); font-family:inherit; font-size:0.9rem; padding:0.6rem 0.9rem;
+    min-width:240px;}
+  .search-input:focus{outline:none; border-color:var(--vein-gold-bright,#d9ad5c);}
+</style>
 </head>
 <body>
 
@@ -99,6 +119,7 @@
       <p>เลือกได้สูงสุด 3 ชนิดเพื่อนำไปเปรียบเทียบ (ติ๊กที่ช่อง "เลือกเปรียบเทียบ" บนการ์ด)</p>
     </div>
     <div class="filter-bar">
+      <input type="text" id="f-search" placeholder="🔍 ค้นหาหิน เช่น jasper, สีดำ, ครัว..." class="search-input">
       <select id="f-color">
         <option value="">สี: ทั้งหมด</option>
         <option value="black">⚫ ดำ</option>
@@ -219,8 +240,15 @@
     </div>
     <div class="chat-box">
       <div class="chat-log" id="chat-log"></div>
+      <div class="chat-image-preview" id="chat-image-preview">
+        <img id="chat-image-preview-img" alt="รูปที่แนบ">
+        <span>แนบรูปแล้ว — AI จะดูรูปนี้ประกอบคำตอบ</span>
+        <button type="button" id="chat-image-remove-btn" title="เอารูปออก">✕</button>
+      </div>
       <form id="chat-form" class="chat-input-row">
-        <input type="text" id="chat-input" placeholder="พิมพ์คำถามเกี่ยวกับหิน..." autocomplete="off">
+        <input type="file" id="chat-image-input" accept="image/*" hidden>
+        <button type="button" id="chat-image-btn" class="chat-attach-btn" title="ถ่ายรูปห้อง/พื้นที่ของคุณ ให้ AI แนะนำหินที่เข้ากัน">📷</button>
+        <input type="text" id="chat-input" placeholder="พิมพ์คำถามเกี่ยวกับหิน... หรือแนบรูปห้องของคุณ" autocomplete="off">
         <button type="submit" class="btn-primary">ส่ง</button>
       </form>
     </div>
@@ -297,8 +325,9 @@
 </div>
 
 <script src="app.js"></script>
-</body>
-</html>
 <script src="auth.js"></script>
+<script src="profile.js"></script>
 <script src="projects-api.js"></script>
 <script src="catalog-api.js"></script>
+</body>
+</html>

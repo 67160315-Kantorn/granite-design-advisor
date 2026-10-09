@@ -12,10 +12,13 @@ main.py — จุดเริ่มต้นของ Granite Design Advisor ba
 import logging
 import os
 from pathlib import Path
-from routers.Auth import router as auth_router
-from routers.Users import router as users_router
-from routers.Projects import router as projects_router
+
 from dotenv import load_dotenv
+# สำคัญ: ต้องเรียกตรงนี้ "ก่อน" import router ใดๆ ทั้งสิ้น เพราะหลายโมดูล
+# (เช่น auth_utils.py อ่าน JWT_SECRET_KEY, database.py อ่าน DB_*) อ่านค่าจาก
+# os.environ ตอน import ครั้งแรกเลย (module-level) ถ้า import ก่อน load_dotenv()
+# ตัวแปรพวกนั้นจะได้ค่าว่างค้างไปตลอด ต่อให้ .env โหลดสำเร็จทีหลังก็ไม่ช่วย
+#
 # override=True: ค่าใน .env ต้อง "ชนะ" เสมอ แม้เครื่องจะมี environment variable ชื่อเดียวกัน
 # (เช่น GEMINI_API_KEY, GOOGLE_API_KEY) ค้างอยู่จากการตั้งค่าครั้งก่อนๆ ก็ตาม — ค่า default ของ
 # load_dotenv() คือ override=False ซึ่งจะ "แพ้" ให้ตัวแปรเก่าที่ค้างอยู่ใน OS เสมอ ทำให้แก้ .env
@@ -26,6 +29,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from routers.Auth import router as auth_router
+from routers.Users import router as users_router
+from routers.Projects import router as projects_router
+from routers.Catalog import router as catalog_router
 from routers.Chat import router as chat_router
 from routers.Estimate import router as estimate_router, start_estimate_scheduler
 
@@ -56,6 +63,9 @@ app.include_router(estimate_router)
 app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(projects_router)
+app.include_router(catalog_router)
+
+
 @app.on_event("startup")
 def on_startup():
     if not os.environ.get("GEMINI_API_KEY"):
