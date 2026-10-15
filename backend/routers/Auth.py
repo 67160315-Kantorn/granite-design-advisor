@@ -68,6 +68,7 @@ class UserResponse(BaseModel):
     username: str
     email: str
     full_name: Optional[str] = None
+    role: str = "user"
 
     model_config = {"from_attributes": True}
 
@@ -86,6 +87,13 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="ไม่พบผู้ใช้ หรือบัญชีถูกปิดใช้งาน")
     return user
+
+
+def require_admin(current_user: User = Depends(get_current_user)) -> User:
+    """Dependency: อนุญาตเฉพาะผู้ใช้ที่มี role = admin"""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="ต้องเป็นแอดมินเท่านั้น")
+    return current_user
 
 
 # ---------------------------------------------------------------------------

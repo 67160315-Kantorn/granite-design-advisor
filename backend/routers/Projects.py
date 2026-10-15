@@ -10,13 +10,15 @@ API Projects: "โปรเจกต์ของฉัน" ผูกกับบ
 - DELETE /projects/{id}                   — ลบโปรเจกต์ (รายการข้างในลบตามอัตโนมัติ)
 - POST   /projects/{id}/items             — เพิ่มรายการเข้าโปรเจกต์ (หิน/ราคา/คำแนะนำ AI)
 - DELETE /projects/{id}/items/{item_id}   — ลบรายการออกจากโปรเจกต์
+- GET    /projects/{id}/export            — ดาวน์โหลดสรุปโปรเจกต์เป็นไฟล์ PDF (รองรับภาษาไทย)
 """
 import sys
 from datetime import datetime
+from urllib.parse import quote
 from pathlib import Path
 from typing import Any, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session, joinedload
 
@@ -24,7 +26,8 @@ _project_root = Path(__file__).resolve().parent.parent
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 from database import get_db
-from models import User, Project, ProjectItem
+from models import User, Project, ProjectItem, GraniteProduct
+from pdf_export import build_project_pdf
 from routers.Auth import get_current_user
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
@@ -133,6 +136,47 @@ def get_project(
     db: Session = Depends(get_db),
 ):
     return _get_owned_project(project_id, current_user, db)
+
+
+# ---------------------------------------------------------------------------
+# GET /projects/{id}/export  (PDF)
+# ---------------------------------------------------------------------------
+
+@router.get("/{project_id}/export")
+def export_project_pdf(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """สรุปโปรเจกต์เป็น PDF — ต้อง login และเป็นเจ้าของโปรเจกต์ (ใช้ fetch + token ดาวน์โหลด ไม่ใช่ลิงก์ตรง)"""
+    project = _get_owned_project(project_id, current_user, db)
+
+    items = [
+        {"kind": it.kind, "title": it.title, "detail": it.detail, "created_at": it.created_at}
+        for it in sorted(project.items, key=lambda i: i.id)
+    ]
+
+    # ดึงราคา "ปัจจุบัน" ของหินที่ผูกอยู่กับรายการ (stoneId / stone.id) จาก DB
+    stone_ids = set()
+    for it in items:
+        d = it["detail"] if isinstance(it["detail"], dict) else {}
+        sid = d.get("stoneId") or (d.get("stone") or {}).get("id")
+        try:
+            if sid is not None:
+                stone_ids.add(int(sid))
+        except (TypeError, ValueError):
+            pass
+    products = {}
+    if stone_ids:
+        for p in db.query(GraniteProduct).filter(GraniteProduct.id.in_(stone_ids)).all():
+            products[p.id] = {"price": float(p.product_price), "color": p.color, "material": p.material}
+
+    pdf_bytes = build_project_pdf(
+        project.name, items, products, owner_name=current_user.full_name or current_user.username
+    )
+    # ชื่อไฟล์ไทยต้องเข้ารหัสแบบ RFC 5987 (filename*) ส่วน filename ธรรมดาเป็น fallback ภาษาอังกฤษ
+    disposition = f"attachment; filename=\"project-{project.id}.pdf\"; filename*=UTF-8''{quote(project.name)}.pdf"
+    return Response(content=pdf_bytes, media_type="application/pdf", headers={"Content-Disposition": disposition})
 
 
 # ---------------------------------------------------------------------------

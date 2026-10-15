@@ -3,6 +3,10 @@ FROM python:3.13-slim
 
 WORKDIR /app
 
+# ฟอนต์ไทย (TLWG แบบ .ttf — fpdf2 ใช้ไฟล์ .otf ไม่ได้) สำหรับสร้าง PDF ฝั่ง backend — ดู backend/pdf_export.py
+RUN apt-get update && apt-get install -y --no-install-recommends fonts-tlwg-garuda-ttf fonts-tlwg-loma-ttf \
+    && rm -rf /var/lib/apt/lists/*
+
 # copy แค่ requirements.txt ก่อน แล้ว install — เทคนิคนี้ทำให้ Docker cache layer นี้ไว้
 # ครั้งต่อไปที่ build ถ้าไม่ได้แก้ requirements.txt จะไม่ต้อง pip install ใหม่ทุกครั้ง (build เร็วขึ้นมาก)
 COPY backend/requirements.txt backend/requirements.txt

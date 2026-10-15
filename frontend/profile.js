@@ -45,6 +45,9 @@
       color:var(--marble-white,#eee); display:flex; justify-content:space-between;}
     .gda-member-list .uname{font-weight:600;}
     .gda-member-list .fname{color:var(--stone-gray,#998); font-size:0.8rem;}
+    .gda-badge-admin{display:inline-block; font-size:0.62rem; letter-spacing:0.08em; padding:0.1rem 0.4rem;
+      border:1px solid var(--gold,#d9ad5c); color:var(--gold,#d9ad5c); margin-left:0.4rem; vertical-align:middle;}
+    .gda-member-list li{align-items:center;}
     .gda-pagination{display:flex; justify-content:space-between; align-items:center; margin-top:1rem; font-size:0.82rem;}
     .gda-pagination button{background:none; border:1px solid var(--rule,#444); color:var(--marble-white-dim,#ccc);
       font-family:inherit; padding:0.4rem 0.8rem; cursor:pointer;}
@@ -190,6 +193,10 @@
   document.getElementById("gda-members-close").addEventListener("click", closeMembersModal);
   membersOverlay.addEventListener("click", (e) => { if (e.target === membersOverlay) closeMembersModal(); });
 
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
   let membersPage = 1;
   const MEMBERS_PAGE_SIZE = 10;
 
@@ -211,8 +218,15 @@
     errorEl.textContent = "";
     try {
       const data = await apiRequest(`/users?page=${membersPage}&page_size=${MEMBERS_PAGE_SIZE}`);
+      const me = currentProfileUser || await apiRequest("/me");
+      currentProfileUser = me;
+      const isAdmin = me.role === "admin";
       listEl.innerHTML = data.items.map((u) => `
-        <li><span class="uname">${u.username}</span><span class="fname">${u.full_name || ""}</span></li>
+        <li>
+          <span><span class="uname">${esc(u.username)}</span>${u.role === "admin" ? ' <span class="gda-badge-admin">ADMIN</span>' : ""}<br><span class="fname">${esc(u.full_name || "")}</span></span>
+          ${isAdmin && u.id !== me.id && u.role !== "admin"
+            ? `<button type="button" class="gda-btn-danger gda-del-member" data-id="${u.id}" data-name="${esc(u.username)}">ลบ</button>` : ""}
+        </li>
       `).join("");
       const totalPages = Math.max(1, Math.ceil(data.total / data.page_size));
       pageLabel.textContent = `หน้า ${data.page} / ${totalPages} (ทั้งหมด ${data.total} คน)`;
@@ -223,6 +237,19 @@
       listEl.innerHTML = "";
     }
   }
+
+  // แอดมินกด "ลบ" สมาชิกจากรายชื่อ
+  document.getElementById("gda-member-list").addEventListener("click", async (e) => {
+    const btn = e.target.closest(".gda-del-member");
+    if (!btn) return;
+    if (!confirm(`ลบสมาชิก "${btn.dataset.name}" ? โปรเจกต์ของเขาจะถูกลบไปด้วย และย้อนกลับไม่ได้`)) return;
+    try {
+      await apiRequest(`/users/${btn.dataset.id}`, { method: "DELETE" });
+      loadMembers();
+    } catch (err) {
+      document.getElementById("gda-members-error").textContent = "ลบไม่สำเร็จ: " + err.message;
+    }
+  });
 
   document.getElementById("gda-members-prev").addEventListener("click", () => {
     if (membersPage > 1) { membersPage--; loadMembers(); }

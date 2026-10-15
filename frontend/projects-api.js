@@ -93,47 +93,33 @@
   window.deleteProject = deleteProject;
 
   async function exportProjectPDF(projectId) {
-    let detail;
+    // PDF สร้างฝั่ง backend (ฟอนต์ไทยครบ) — ต้องแนบ token จึงใช้ fetch แล้วแปลงเป็นไฟล์ให้ดาวน์โหลดเอง
     try {
-      detail = await apiRequest(`/projects/${projectId}`);
+      const token = (window.GDA_AUTH && window.GDA_AUTH.getToken()) || null;
+      const res = await fetch(_API_BASE + `/projects/${projectId}/export`, {
+        headers: token ? { Authorization: "Bearer " + token } : {},
+      });
+      if (!res.ok) {
+        let msg = `เกิดข้อผิดพลาด (${res.status})`;
+        try { const body = await res.json(); if (body && body.detail) msg = body.detail; } catch (e) {}
+        throw new Error(msg);
+      }
+      let filename = `project-${projectId}.pdf`;
+      const cd = res.headers.get("Content-Disposition") || "";
+      const m = cd.match(/filename\*=UTF-8''([^;]+)/i);
+      if (m) { try { filename = decodeURIComponent(m[1]); } catch (e) {} }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
     } catch (err) {
-      alert("โหลดข้อมูลโปรเจกต์ไม่สำเร็จ: " + err.message);
-      return;
+      alert("Export PDF ไม่สำเร็จ: " + err.message);
     }
-    if (typeof window.jspdf === "undefined" || !window.jspdf.jsPDF) {
-      alert("ไม่พบไลบรารี jsPDF กรุณารีเฟรชหน้าเว็บแล้วลองอีกครั้ง");
-      return;
-    }
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-
-    doc.setFontSize(16);
-    doc.text(detail.name, 14, 20);
-    doc.setFontSize(10);
-    doc.setTextColor(120);
-    doc.text("Granite Design Advisor \u2014 \u0e2a\u0e23\u0e38\u0e1b\u0e42\u0e1b\u0e23\u0e40\u0e08\u0e01\u0e15\u0e4c", 14, 27);
-
-    let y = 40;
-    if (detail.items.length === 0) {
-      doc.setFontSize(10);
-      doc.setTextColor(0);
-      doc.text("ยังไม่มีรายการในโปรเจกต์นี้", 14, y);
-    }
-    detail.items.forEach((item) => {
-      const dateStr = item.created_at ? new Date(item.created_at).toLocaleDateString("th-TH") : "";
-      doc.setFontSize(9);
-      doc.setTextColor(150);
-      doc.text("[" + (KIND_LABEL[item.kind] || item.kind) + "] " + dateStr, 14, y);
-      y += 5;
-      doc.setFontSize(11);
-      doc.setTextColor(20);
-      const lines = doc.splitTextToSize(item.title, 180);
-      doc.text(lines, 14, y);
-      y += lines.length * 6 + 4;
-      if (y > 275) { doc.addPage(); y = 20; }
-    });
-
-    doc.save(detail.name.replace(/\s+/g, "_") + ".pdf");
   }
   window.exportProjectPDF = exportProjectPDF;
 

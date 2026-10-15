@@ -28,6 +28,9 @@
     color:var(--marble-white,#eee); font-family:inherit; font-size:0.9rem; padding:0.6rem 0.9rem;
     min-width:240px;}
   .search-input:focus{outline:none; border-color:var(--vein-gold-bright,#d9ad5c);}
+  .clickable{cursor:pointer;}
+  h3.clickable:hover{color:var(--vein-gold-bright,#d9ad5c);}
+  .stone-desc{display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden;}
 </style>
 </head>
 <body>
@@ -152,6 +155,14 @@
         <option value="">ประเภทหิน: ทั้งหมด</option>
         <option value="granite">หินแกรนิต</option>
         <option value="marble">หินอ่อน</option>
+      </select>
+      <select id="f-sort" title="เรียงลำดับ">
+        <option value="">เรียงตาม: ค่าเริ่มต้น</option>
+        <option value="price-asc">ราคา: ต่ำ → สูง</option>
+        <option value="price-desc">ราคา: สูง → ต่ำ</option>
+        <option value="durability">ความแข็งแรง: มาก → น้อย</option>
+        <option value="maintenance">ดูแลรักษาง่าย: มาก → น้อย</option>
+        <option value="name">ชื่อ: A → Z</option>
       </select>
     </div>
     <div class="catalog-grid" id="catalog-grid"></div>
@@ -329,5 +340,8 @@
 <script src="profile.js"></script>
 <script src="projects-api.js"></script>
 <script src="catalog-api.js"></script>
+<script src="admin-catalog.js"></script>
+<script src="product-detail.js"></script>
+<script src="chat-history.js"></script>
 </body>
 </html>

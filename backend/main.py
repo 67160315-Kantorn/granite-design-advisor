@@ -68,6 +68,13 @@ app.include_router(catalog_router)
 
 @app.on_event("startup")
 def on_startup():
+    # สร้างตารางประวัติแชทอัตโนมัติถ้ายังไม่มี (checkfirst) — ไม่ต้องรัน SQL เพิ่มเอง
+    try:
+        from database import engine
+        from models import ChatMessage
+        ChatMessage.__table__.create(bind=engine, checkfirst=True)
+    except Exception as e:
+        logger.exception("สร้างตาราง chat_messages ไม่สำเร็จ (ประวัติแชทจะใช้ไม่ได้): %s", e)
     if not os.environ.get("GEMINI_API_KEY"):
         logger.warning(
             "⚠️  ยังไม่ได้ตั้งค่า GEMINI_API_KEY ใน .env — หน้า AI Chat จะใช้งานไม่ได้จนกว่าจะตั้งค่า"

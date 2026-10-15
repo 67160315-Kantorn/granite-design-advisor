@@ -5,12 +5,13 @@ API User Management: จัดการข้อมูลผู้ใช้
 - GET  /users/{id}             — ดึงข้อมูล user คนใดคนหนึ่ง (ต้อง login)
 - GET  /users                  — ดึงรายชื่อ user ทั้งหมด แบบแบ่งหน้า (ต้อง login)
 - PUT  /users/{id}             — แก้ไขข้อมูล user (แก้ได้แค่ของตัวเองเท่านั้น)
-- DELETE /users/{id}           — ลบ user (ลบได้แค่ของตัวเองเท่านั้น)
+- DELETE /users/{id}           — ลบ user (ลบของตัวเองได้ / แอดมินลบสมาชิกทั่วไปได้)
+- PUT  /users/{id}/role        — เปลี่ยน role เป็น user/admin (เฉพาะแอดมิน)
 - GET  /check-username/{name}  — เช็คว่า username ว่างไหม (ไม่ต้อง login — ใช้ตอนกรอกฟอร์มสมัคร)
 """
 import sys
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, EmailStr
@@ -21,7 +22,7 @@ if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 from database import get_db
 from models import User
-from routers.Auth import get_current_user, UserResponse
+from routers.Auth import get_current_user, require_admin, UserResponse
 
 router = APIRouter(tags=["User Management"])
 
@@ -33,6 +34,10 @@ router = APIRouter(tags=["User Management"])
 class UserUpdateRequest(BaseModel):
     email: Optional[EmailStr] = None
     full_name: Optional[str] = None
+
+
+class RoleUpdateRequest(BaseModel):
+    role: Literal["user", "admin"]
 
 
 class UserListResponse(BaseModel):
@@ -143,18 +148,48 @@ def delete_user(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """ลบบัญชี user — ลบได้แค่ของตัวเองเท่านั้น (โปรเจกต์/รายการของ user จะถูกลบตามไปด้วย
-    อัตโนมัติเพราะตั้ง FOREIGN KEY ... ON DELETE CASCADE ไว้ใน schema.sql)"""
-    if current_user.id != user_id:
+    """ลบบัญชี user — ลบของตัวเองได้เสมอ / แอดมินลบสมาชิกทั่วไปได้
+    (แอดมินลบแอดมินคนอื่นไม่ได้ และแอดมินคนสุดท้ายลบตัวเองไม่ได้)
+    โปรเจกต์/รายการของ user จะถูกลบตามไปด้วยอัตโนมัติ (ON DELETE CASCADE)"""
+    is_self = current_user.id == user_id
+    if not is_self and current_user.role != "admin":
         raise HTTPException(status_code=403, detail="ลบได้แค่บัญชีของตัวเองเท่านั้น")
 
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="ไม่พบผู้ใช้นี้")
 
+    if not is_self and user.role == "admin":
+        raise HTTPException(status_code=403, detail="ลบบัญชีแอดมินคนอื่นไม่ได้")
+    if is_self and user.role == "admin" and db.query(User).filter(User.role == "admin").count() <= 1:
+        raise HTTPException(status_code=400, detail="ลบแอดมินคนสุดท้ายไม่ได้")
+
     db.delete(user)
     db.commit()
     return None
+
+
+# ---------------------------------------------------------------------------
+# PUT /users/{id}/role  (เฉพาะแอดมิน)
+# ---------------------------------------------------------------------------
+
+@router.put("/users/{user_id}/role", response_model=UserResponse)
+def set_user_role(
+    user_id: int,
+    request: RoleUpdateRequest,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """แอดมินตั้ง role ให้สมาชิก (เปลี่ยน role ของตัวเองไม่ได้ กันไม่ให้ไม่เหลือแอดมิน)"""
+    if admin.id == user_id:
+        raise HTTPException(status_code=400, detail="เปลี่ยน role ของตัวเองไม่ได้")
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="ไม่พบผู้ใช้นี้")
+    user.role = request.role
+    db.commit()
+    db.refresh(user)
+    return user
 
 
 # ---------------------------------------------------------------------------

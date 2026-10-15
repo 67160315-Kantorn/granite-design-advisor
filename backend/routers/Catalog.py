@@ -3,6 +3,9 @@ API Catalog: ให้บริการข้อมูลหินแกรน�
 
 - GET /granite-products             — รายการหินทั้งหมด กรองได้ตาม color / style / area / material
 - GET /granite-products/{id}        — ข้อมูลหินชิ้นเดียว
+- POST   /granite-products          — เพิ่มหินใหม่ (เฉพาะแอดมิน)
+- PUT    /granite-products/{id}     — แก้ไขหิน (เฉพาะแอดมิน)
+- DELETE /granite-products/{id}     — ลบหิน (เฉพาะแอดมิน)
 
 endpoint พวกนี้ "ไม่ต้อง login" เพราะเป็นข้อมูลสินค้าสาธารณะที่ทุกคนดูได้
 (ต่างจาก /projects ที่ต้อง login เพราะเป็นข้อมูลส่วนตัวของแต่ละคน)
@@ -11,8 +14,8 @@ import sys
 from pathlib import Path
 from typing import Any, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import func as sa_func
 from sqlalchemy import or_, text
@@ -20,8 +23,10 @@ from sqlalchemy import or_, text
 _project_root = Path(__file__).resolve().parent.parent
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
-from database import SessionLocal
-from models import GraniteProduct
+from database import SessionLocal, get_db
+from models import GraniteProduct, User
+from routers.Auth import require_admin
+from routers.Chat import invalidate_products_cache
 
 router = APIRouter(tags=["Catalog"])
 
@@ -138,3 +143,105 @@ def get_product(product_id: int):
         return product
     finally:
         db.close()
+
+
+# ---------------------------------------------------------------------------
+# แอดมิน: เพิ่ม / แก้ไข / ลบหิน  (ต้อง login ด้วยบัญชี role = admin)
+# ---------------------------------------------------------------------------
+
+RATING_KEYS = ("price", "durability", "maintenance", "modern", "luxury")
+
+
+class ProductWriteRequest(BaseModel):
+    product_title: str = Field(..., min_length=1, max_length=255)
+    product_description: Optional[str] = None
+    product_price: float = Field(..., ge=0)
+    image_url: Optional[str] = Field(None, max_length=500)
+    product_url: Optional[str] = Field(None, max_length=500)
+    color: Optional[str] = Field(None, max_length=30)
+    material: Optional[str] = Field(None, max_length=20)
+    styles: List[str] = []
+    areas: List[str] = []
+    indoor: Optional[str] = Field(None, max_length=10)
+    rating: Optional[dict] = None
+
+
+def _clean_rating(rating: Optional[dict]) -> Optional[dict]:
+    """เก็บเฉพาะคีย์คะแนนที่รู้จัก และบังคับเป็นจำนวนเต็ม 1-5"""
+    if not rating:
+        return None
+    cleaned = {}
+    for key in RATING_KEYS:
+        if key in rating:
+            try:
+                value = int(rating[key])
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=422, detail=f"คะแนน {key} ต้องเป็นตัวเลข 1-5")
+            if not 1 <= value <= 5:
+                raise HTTPException(status_code=422, detail=f"คะแนน {key} ต้องอยู่ระหว่าง 1-5")
+            cleaned[key] = value
+    return cleaned or None
+
+
+def _apply_fields(product: GraniteProduct, req: ProductWriteRequest) -> None:
+    product.product_title = req.product_title.strip()
+    product.product_description = req.product_description
+    product.product_price = req.product_price
+    product.image_url = req.image_url or None
+    product.product_url = req.product_url or None
+    product.color = req.color or None
+    product.material = req.material or None
+    product.styles = req.styles
+    product.areas = req.areas
+    product.indoor = req.indoor or None
+    product.rating = _clean_rating(req.rating)
+
+
+@router.post("/granite-products", response_model=GraniteProductResponse, status_code=status.HTTP_201_CREATED)
+def create_product(
+    request: ProductWriteRequest,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """แอดมินเพิ่มหินใหม่"""
+    product = GraniteProduct()
+    _apply_fields(product, request)
+    db.add(product)
+    db.commit()
+    db.refresh(product)
+    invalidate_products_cache()
+    return product
+
+
+@router.put("/granite-products/{product_id}", response_model=GraniteProductResponse)
+def update_product(
+    product_id: int,
+    request: ProductWriteRequest,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """แอดมินแก้ไขข้อมูลหิน (ส่งค่าทุกช่องมาทับของเดิม)"""
+    product = db.query(GraniteProduct).filter(GraniteProduct.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="ไม่พบหินชนิดนี้")
+    _apply_fields(product, request)
+    db.commit()
+    db.refresh(product)
+    invalidate_products_cache()
+    return product
+
+
+@router.delete("/granite-products/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_product(
+    product_id: int,
+    admin: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """แอดมินลบหิน"""
+    product = db.query(GraniteProduct).filter(GraniteProduct.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="ไม่พบหินชนิดนี้")
+    db.delete(product)
+    db.commit()
+    invalidate_products_cache()
+    return None

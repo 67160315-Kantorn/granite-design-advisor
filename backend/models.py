@@ -19,10 +19,18 @@ class User(Base):
     password_hash = Column(String(255), nullable=False)
     full_name = Column(String(100), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
+    role = Column(String(20), nullable=False, default="user", server_default="user")  # "user" | "admin"
     created_at = Column(TIMESTAMP, server_default=func.now())
     updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
 
     projects = relationship("Project", back_populates="owner", cascade="all, delete-orphan")
+    # ไม่ใช้ FOREIGN KEY ระดับ DB กับ chat_messages (กันปัญหาชนิดคอลัมน์ users.id ไม่ตรงกันตอนสร้างตาราง)
+    # ลบ user ผ่าน ORM แล้วประวัติแชทจะถูกลบตามด้วย cascade ตรงนี้
+    chat_messages = relationship(
+        "ChatMessage",
+        primaryjoin="User.id == foreign(ChatMessage.user_id)",
+        cascade="all, delete-orphan",
+    )
 
 
 class Project(Base):
@@ -68,3 +76,18 @@ class GraniteProduct(Base):
     rating = Column(JSON, nullable=True)   # เช่น {"price":4,"durability":5,...}
     created_at = Column(TIMESTAMP, server_default=func.now())
     updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
+
+
+class ChatMessage(Base):
+    """ประวัติ AI Chat ต่อผู้ใช้ — เก็บเฉพาะข้อความ (รูปที่แนบไม่เก็บ แค่จำว่ามีรูปแนบ)
+    ตารางนี้ถูกสร้างอัตโนมัติตอน backend เริ่มทำงาน (ดู main.py: on_startup) ไม่ต้องรัน SQL เอง"""
+    __tablename__ = "chat_messages"
+    __table_args__ = {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"}
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, nullable=False, index=True)   # อ้าง users.id (ผูกที่ relationship ไม่ใช้ FK ใน DB)
+    role = Column(String(10), nullable=False)          # "user" | "assistant"
+    content = Column(Text, nullable=False)
+    has_image = Column(Boolean, default=False, nullable=False)
+    products = Column(JSON, nullable=True)             # การ์ดรูปหินที่ AI พูดถึง (เฉพาะข้อความ assistant)
+    created_at = Column(TIMESTAMP, server_default=func.now())

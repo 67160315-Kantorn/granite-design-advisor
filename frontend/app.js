@@ -262,19 +262,31 @@ function renderCatalog(){
     return true;
   });
 
+  // เรียงลำดับ (ค่าเริ่มต้น = ลำดับเดิมจาก backend / ความเกี่ยวข้องของคำค้น)
+  const sortEl = document.getElementById("f-sort");
+  const rate = (s, k) => (s.rating && s.rating[k]) || 0;
+  const sorters = {
+    "price-asc": (a,b)=>a.price - b.price,
+    "price-desc": (a,b)=>b.price - a.price,
+    "durability": (a,b)=>rate(b,"durability") - rate(a,"durability"),
+    "maintenance": (a,b)=>rate(b,"maintenance") - rate(a,"maintenance"),
+    "name": (a,b)=>a.name.localeCompare(b.name),
+  };
+  if(sortEl && sorters[sortEl.value]) filtered.sort(sorters[sortEl.value]);
+
   grid.innerHTML = filtered.map(s=>`
-    <div class="stone-card ${compareSelection.includes(s.id) ? 'selected' : ''}">
-      <div class="stone-swatch" style="background-image:url('${s.image}')"></div>
+    <div class="stone-card ${compareSelection.includes(s.id) ? 'selected' : ''}" data-id="${s.id}">
+      <div class="stone-swatch clickable" style="background-image:url('${s.image}')" onclick="openStoneDetail('${s.id}')" title="ดูรายละเอียด"></div>
       <div class="stone-body">
         <div>
-          <span class="stone-tag">${COLOR_LABELS[s.color]}</span>
+          <span class="stone-tag">${COLOR_LABELS[s.color] || s.color || ""}</span>
           <span class="stone-tag">${s.material === "marble" ? "หินอ่อน" : "หินแกรนิต"}</span>
           ${s.styles.map(st=>`<span class="stone-tag">${st}</span>`).join("")}
         </div>
-        <h3 style="margin-top:0.5rem;">${s.name}</h3>
+        <h3 class="clickable" style="margin-top:0.5rem;" onclick="openStoneDetail('${s.id}')">${s.name}</h3>
         <p class="stone-desc">${s.desc}</p>
         <div class="stone-meta"><b>ความแข็ง:</b> ${renderStars(s.rating.durability)} &nbsp; <b>ดูแลรักษาง่าย:</b> ${renderStars(s.rating.maintenance)}</div>
-        <div class="stone-meta"><b>เหมาะกับ:</b> ${s.areas.map(a=>AREA_LABELS[a]).join(", ")}</div>
+        <div class="stone-meta"><b>เหมาะกับ:</b> ${s.areas.map(a=>AREA_LABELS[a] || a).join(", ")}</div>
         <div class="stone-meta"><b>การใช้งาน:</b> ${s.indoor === "indoor" ? "ภายในอาคาร" : "ภายใน/ภายนอกอาคาร"}</div>
         <div class="stone-price">฿${s.price.toLocaleString()} / ตร.ม.</div>
         <div class="stone-actions">
@@ -284,6 +296,7 @@ function renderCatalog(){
           </label>
         </div>
         <div class="stone-actions" style="margin-top:0.6rem;">
+          <button class="btn-small" onclick="openStoneDetail('${s.id}')">รายละเอียด</button>
           <button class="btn-small" onclick="goPriceWithStone('${s.id}')">คำนวณราคา</button>
           <button class="btn-small" onclick="addToActiveProject('granite','${s.name.replace(/'/g,"\\'")}', {stoneId:'${s.id}', price:${s.price}})">+ โปรเจกต์</button>
         </div>
@@ -291,7 +304,7 @@ function renderCatalog(){
     </div>
   `).join("") || `<p class="history-empty">ไม่พบหินที่ตรงกับเงื่อนไขที่เลือก</p>`;
 }
-["f-color","f-style","f-area","f-material"].forEach(id=>{
+["f-color","f-style","f-area","f-material","f-sort"].forEach(id=>{
   document.getElementById(id).addEventListener("change", renderCatalog);
 });
 
@@ -501,9 +514,12 @@ async function sendChatMessage(userText, imageDataUrl){
   submitBtn.disabled = true;
 
   try{
+    // แนบ token (ถ้าล็อกอินอยู่) เพื่อให้ backend บันทึกประวัติแชทให้ผู้ใช้คนนั้น — ไม่ล็อกอินก็แชทได้เหมือนเดิม
+    const chatHeaders = { "Content-Type":"application/json" };
+    if(window.GDA_AUTH && window.GDA_AUTH.getToken()) chatHeaders["Authorization"] = "Bearer " + window.GDA_AUTH.getToken();
     const res = await fetch(API_BASE + "/chat/completions/stream", {
       method:"POST",
-      headers:{ "Content-Type":"application/json" },
+      headers: chatHeaders,
       body: JSON.stringify({ messages: chatHistory }),
     });
 

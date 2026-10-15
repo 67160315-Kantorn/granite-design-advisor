@@ -40,6 +40,7 @@
       desc: p.product_description || "",
       rating: p.rating || { price: 3, durability: 3, maintenance: 3, modern: 3, luxury: 3 },
       image: p.image_url,
+      url: p.product_url || "",
     }));
   }
 
@@ -138,6 +139,9 @@
       if (el) el.addEventListener("change", performCatalogSearch);
     });
   }
+
+  // ให้ปลั๊กอินอื่น (เช่น admin-catalog.js) สั่งโหลดแคตตาล็อกใหม่หลังแอดมินแก้ข้อมูล
+  window.GDA_CATALOG_RELOAD = loadCatalogFromAPI;
 
   loadCatalogFromAPI();
 })();
