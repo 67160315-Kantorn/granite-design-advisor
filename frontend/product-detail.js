@@ -79,6 +79,7 @@
       <div class="gda-pd-actions">
         <button type="button" class="btn-small" id="gda-pd-price-btn">คำนวณราคา</button>
         <button type="button" class="btn-small" id="gda-pd-project-btn">+ โปรเจกต์</button>
+        <button type="button" class="btn-small" id="gda-pd-fav-btn"></button>
         ${/^https?:\/\//.test(s.url || "") ? `<a class="btn-small" href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">ดูสินค้าจริง ↗</a>` : ""}
       </div>`;
 
@@ -90,6 +91,16 @@
       if (typeof window.addToActiveProject === "function") {
         window.addToActiveProject("granite", s.name, { stoneId: s.id, price: s.price });
       }
+    });
+    const favBtn = document.getElementById("gda-pd-fav-btn");
+    const paintFav = () => {
+      const on = !!(window.GDA_FAV && window.GDA_FAV.has(s.id));
+      favBtn.textContent = on ? "♥ ในรายการโปรด" : "♡ เพิ่มรายการโปรด";
+      favBtn.style.color = on ? "var(--vein-gold-bright,#d9ad5c)" : "";
+    };
+    paintFav();
+    favBtn.addEventListener("click", async () => {
+      if (window.GDA_FAV) { await window.GDA_FAV.toggle(s.id); paintFav(); }
     });
     overlay.classList.add("open");
   };

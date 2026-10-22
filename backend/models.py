@@ -2,7 +2,7 @@
 models.py — SQLAlchemy ORM models ตรงกับตารางใน schema.sql
 """
 from sqlalchemy import (
-    Column, Integer, String, Boolean, TIMESTAMP, ForeignKey,
+    Column, Integer, String, Boolean, TIMESTAMP, ForeignKey, UniqueConstraint,
     DECIMAL, Text, JSON, Enum, func,
 )
 from sqlalchemy.orm import relationship
@@ -29,6 +29,11 @@ class User(Base):
     chat_messages = relationship(
         "ChatMessage",
         primaryjoin="User.id == foreign(ChatMessage.user_id)",
+        cascade="all, delete-orphan",
+    )
+    favorites = relationship(
+        "Favorite",
+        primaryjoin="User.id == foreign(Favorite.user_id)",
         cascade="all, delete-orphan",
     )
 
@@ -90,4 +95,19 @@ class ChatMessage(Base):
     content = Column(Text, nullable=False)
     has_image = Column(Boolean, default=False, nullable=False)
     products = Column(JSON, nullable=True)             # การ์ดรูปหินที่ AI พูดถึง (เฉพาะข้อความ assistant)
+    created_at = Column(TIMESTAMP, server_default=func.now())
+
+
+class Favorite(Base):
+    """รายการโปรด: ผู้ใช้ 1 คนกดหัวใจหิน 1 ชนิดได้ครั้งเดียว
+    ไม่ใช้ FOREIGN KEY ระดับ DB (เหตุผลเดียวกับ chat_messages) — ตารางถูกสร้างอัตโนมัติตอน backend เริ่มทำงาน"""
+    __tablename__ = "favorites"
+    __table_args__ = (
+        UniqueConstraint("user_id", "product_id", name="uq_favorite_user_product"),
+        {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"},
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    product_id = Column(Integer, nullable=False, index=True)
     created_at = Column(TIMESTAMP, server_default=func.now())

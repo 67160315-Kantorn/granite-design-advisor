@@ -24,7 +24,7 @@ _project_root = Path(__file__).resolve().parent.parent
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 from database import SessionLocal, get_db
-from models import GraniteProduct, User
+from models import Favorite, GraniteProduct, User
 from routers.Auth import require_admin
 from routers.Chat import invalidate_products_cache
 
@@ -242,6 +242,7 @@ def delete_product(
     if not product:
         raise HTTPException(status_code=404, detail="ไม่พบหินชนิดนี้")
     db.delete(product)
+    db.query(Favorite).filter(Favorite.product_id == product_id).delete(synchronize_session=False)
     db.commit()
     invalidate_products_cache()
     return None

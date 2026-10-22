@@ -34,6 +34,8 @@ from routers.Users import router as users_router
 from routers.Projects import router as projects_router
 from routers.Catalog import router as catalog_router
 from routers.Chat import router as chat_router
+from routers.Favorites import router as favorites_router
+from routers.Admin import router as admin_router
 from routers.Estimate import router as estimate_router, start_estimate_scheduler
 
 logging.basicConfig(level=logging.INFO)
@@ -64,17 +66,20 @@ app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(projects_router)
 app.include_router(catalog_router)
+app.include_router(favorites_router)
+app.include_router(admin_router)
 
 
 @app.on_event("startup")
 def on_startup():
-    # สร้างตารางประวัติแชทอัตโนมัติถ้ายังไม่มี (checkfirst) — ไม่ต้องรัน SQL เพิ่มเอง
-    try:
-        from database import engine
-        from models import ChatMessage
-        ChatMessage.__table__.create(bind=engine, checkfirst=True)
-    except Exception as e:
-        logger.exception("สร้างตาราง chat_messages ไม่สำเร็จ (ประวัติแชทจะใช้ไม่ได้): %s", e)
+    # สร้างตารางที่เพิ่มทีหลัง (ประวัติแชท, รายการโปรด) อัตโนมัติถ้ายังไม่มี (checkfirst)
+    from database import engine
+    from models import ChatMessage, Favorite
+    for model in (ChatMessage, Favorite):
+        try:
+            model.__table__.create(bind=engine, checkfirst=True)
+        except Exception as e:
+            logger.exception("สร้างตาราง %s ไม่สำเร็จ: %s", model.__tablename__, e)
     if not os.environ.get("GEMINI_API_KEY"):
         logger.warning(
             "⚠️  ยังไม่ได้ตั้งค่า GEMINI_API_KEY ใน .env — หน้า AI Chat จะใช้งานไม่ได้จนกว่าจะตั้งค่า"

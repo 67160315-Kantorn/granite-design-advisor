@@ -181,6 +181,7 @@ function goto(viewName){
   window.scrollTo({top:0, behavior:"smooth"});
   if(viewName === "compare") renderCompare();
   if(viewName === "projects") renderProjects();
+  updateCompareBar();
 }
 tabs.forEach(t=>t.addEventListener("click", ()=>goto(t.dataset.view)));
 document.querySelectorAll(".feature-card").forEach(c=>{
@@ -253,8 +254,11 @@ function renderCatalog(){
   const area = document.getElementById("f-area").value;
   const material = document.getElementById("f-material").value;
   const grid = document.getElementById("catalog-grid");
+  const favOnlyEl = document.getElementById("f-fav");
+  const favOnly = !!(favOnlyEl && favOnlyEl.checked);
 
   const filtered = GRANITE_CATALOG.filter(s=>{
+    if(favOnly && !(window.GDA_FAV && window.GDA_FAV.has(s.id))) return false;
     if(color && s.color !== color) return false;
     if(style && !s.styles.includes(style)) return false;
     if(area && !s.areas.includes(area)) return false;
@@ -296,17 +300,47 @@ function renderCatalog(){
           </label>
         </div>
         <div class="stone-actions" style="margin-top:0.6rem;">
+          <button class="btn-small fav-btn ${window.GDA_FAV && window.GDA_FAV.has(s.id) ? 'on' : ''}" onclick="toggleFavorite('${s.id}')" title="รายการโปรด">${window.GDA_FAV && window.GDA_FAV.has(s.id) ? '♥' : '♡'}</button>
           <button class="btn-small" onclick="openStoneDetail('${s.id}')">รายละเอียด</button>
           <button class="btn-small" onclick="goPriceWithStone('${s.id}')">คำนวณราคา</button>
           <button class="btn-small" onclick="addToActiveProject('granite','${s.name.replace(/'/g,"\\'")}', {stoneId:'${s.id}', price:${s.price}})">+ โปรเจกต์</button>
         </div>
       </div>
     </div>
-  `).join("") || `<p class="history-empty">ไม่พบหินที่ตรงกับเงื่อนไขที่เลือก</p>`;
+  `).join("") || `<p class="history-empty">${favOnly ? "ยังไม่มีรายการโปรด — กดหัวใจ ♡ ที่การ์ดหินเพื่อเก็บไว้ (ต้องล็อกอิน)" : "ไม่พบหินที่ตรงกับเงื่อนไขที่เลือก"}</p>`;
+  updateCompareBar();
 }
-["f-color","f-style","f-area","f-material","f-sort"].forEach(id=>{
-  document.getElementById(id).addEventListener("change", renderCatalog);
+["f-color","f-style","f-area","f-material","f-sort","f-fav"].forEach(id=>{
+  const el = document.getElementById(id);
+  if(el) el.addEventListener("change", renderCatalog);
 });
+
+function toggleFavorite(id){
+  if(window.GDA_FAV) window.GDA_FAV.toggle(id);
+  else toast("ระบบรายการโปรดยังไม่พร้อม");
+}
+window.toggleFavorite = toggleFavorite;
+
+/* แถบลอยด้านล่างของแคตตาล็อก: บอกจำนวนหินที่เลือกเทียบ + ปุ่มไปหน้าเปรียบเทียบ */
+function updateCompareBar(){
+  let bar = document.getElementById("compare-bar");
+  if(!bar){
+    bar = document.createElement("div");
+    bar.id = "compare-bar";
+    bar.className = "compare-bar";
+    document.body.appendChild(bar);
+  }
+  const onCatalog = document.getElementById("view-catalog") && document.getElementById("view-catalog").classList.contains("active");
+  if(!compareSelection.length || !onCatalog){ bar.style.display = "none"; return; }
+  const names = compareSelection.map(id=>{ const s = GRANITE_CATALOG.find(x=>x.id===id); return s ? s.name : ""; }).filter(Boolean).join(" · ");
+  bar.style.display = "flex";
+  bar.innerHTML = `<span>⚖️ เลือกเปรียบเทียบ ${compareSelection.length}/3: ${names}</span>
+    <span>
+      <button class="btn-small" onclick="compareSelection=[];renderCatalog();">ล้าง</button>
+      <button class="btn-small primary" ${compareSelection.length<2?"disabled":""} onclick="goto('compare')">${compareSelection.length<2?"เลือกอีกอย่างน้อย 1 ชนิด":"เปรียบเทียบเลย →"}</button>
+    </span>`;
+}
+window.updateCompareBar = updateCompareBar;
 
 function renderStars(n){
   let out = "<span class='stars'>";
@@ -318,7 +352,7 @@ function renderStars(n){
 function toggleCompare(id, checked){
   if(checked){
     if(compareSelection.length >= 3){
-      alert("เลือกเปรียบเทียบได้สูงสุด 3 ชนิด กรุณายกเลิกตัวเลือกอื่นก่อน");
+      toast("เลือกเปรียบเทียบได้สูงสุด 3 ชนิด — ยกเลิกตัวเลือกอื่นก่อน");
       renderCatalog();
       return;
     }
@@ -354,20 +388,36 @@ function renderCompare(){
 
   document.getElementById("compare-chips").innerHTML = stones.map(s=>`<span class="compare-chip">${s.name}</span>`).join("");
 
+  const num = (s,k)=>(s.rating && s.rating[k]) || 0;
+  // best: "max" = ค่ามากสุดดีสุด, "min" = ค่าน้อยสุดดีสุด (ราคา)
   const rows = [
     { label:"ประเภทหิน", render:s=>s.material === "marble" ? "หินอ่อน" : "หินแกรนิต" },
-    { label:"ราคา/ตร.ม.", render:s=>`฿${s.price.toLocaleString()}` },
-    { label:"ความคุ้มราคา", render:s=>renderStars(s.rating.price) },
-    { label:"ความทนทาน", render:s=>renderStars(s.rating.durability) },
-    { label:"ดูแลรักษาง่าย", render:s=>renderStars(s.rating.maintenance) },
-    { label:"Modern", render:s=>renderStars(s.rating.modern) },
-    { label:"Luxury", render:s=>renderStars(s.rating.luxury) },
+    { label:"สี", render:s=>COLOR_LABELS[s.color] || s.color || "-" },
+    { label:"สไตล์", render:s=>(s.styles||[]).join(", ") || "-" },
+    { label:"เหมาะกับ", render:s=>(s.areas||[]).map(a=>AREA_LABELS[a] || a).join(", ") || "-" },
+    { label:"การใช้งาน", render:s=>s.indoor === "indoor" ? "ภายในอาคาร" : "ภายใน/ภายนอก" },
+    { label:"ราคา/ตร.ม.", render:s=>`฿${s.price.toLocaleString()}`, val:s=>s.price, best:"min" },
+    { label:"ความคุ้มราคา", render:s=>renderStars(num(s,"price")), val:s=>num(s,"price"), best:"max" },
+    { label:"ความทนทาน", render:s=>renderStars(num(s,"durability")), val:s=>num(s,"durability"), best:"max" },
+    { label:"ดูแลรักษาง่าย", render:s=>renderStars(num(s,"maintenance")), val:s=>num(s,"maintenance"), best:"max" },
+    { label:"Modern", render:s=>renderStars(num(s,"modern")), val:s=>num(s,"modern"), best:"max" },
+    { label:"Luxury", render:s=>renderStars(num(s,"luxury")), val:s=>num(s,"luxury"), best:"max" },
   ];
 
-  let html = "<thead><tr><th>Steps</th>" + stones.map(s=>`<th>${s.name}</th>`).join("") + "</tr></thead><tbody>";
+  let html = "<thead><tr><th>หัวข้อ</th>" + stones.map(s=>`<th>
+      <div class="cmp-thumb" style="background-image:url('${s.image}')"></div>${s.name}</th>`).join("") + "</tr></thead><tbody>";
   rows.forEach(r=>{
-    html += `<tr><td>${r.label}</td>${stones.map(s=>`<td>${r.render(s)}</td>`).join("")}</tr>`;
+    let bestVal = null;
+    if(r.val){
+      const vals = stones.map(r.val);
+      const target = r.best === "min" ? Math.min(...vals) : Math.max(...vals);
+      if(vals.some(v=>v !== vals[0])) bestVal = target;   // ถ้าทุกชนิดเท่ากัน ไม่ไฮไลต์
+    }
+    html += `<tr><td>${r.label}</td>${stones.map(s=>`<td class="${bestVal !== null && r.val(s) === bestVal ? "cmp-best" : ""}">${r.render(s)}</td>`).join("")}</tr>`;
   });
+  html += `<tr><td></td>${stones.map(s=>`<td>
+      <button class="btn-small" onclick="openStoneDetail('${s.id}')">รายละเอียด</button>
+      <button class="btn-small" onclick="goPriceWithStone('${s.id}')">คำนวณราคา</button></td>`).join("")}</tr>`;
   html += "</tbody>";
   document.getElementById("compare-table").innerHTML = html;
 }
