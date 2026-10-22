@@ -526,8 +526,9 @@ chatImageInput.addEventListener("change", () => {
     return;
   }
   const reader = new FileReader();
-  reader.onload = () => {
-    selectedImageDataUrl = reader.result;
+  reader.onload = async () => {
+    // ย่อรูปก่อนส่ง (ด้านยาวสุด 1280px, JPEG) — ส่งเร็วขึ้นและประหยัดโควตา AI โดยที่ยังเห็นรายละเอียดห้องพอ
+    selectedImageDataUrl = await downscaleImage(reader.result, 1280, 0.85);
     chatImagePreviewImg.src = selectedImageDataUrl;
     chatImagePreview.style.display = "flex";
   };
@@ -537,6 +538,29 @@ chatImageInput.addEventListener("change", () => {
   reader.readAsDataURL(file);
 });
 
+function downscaleImage(dataUrl, maxSide, quality){
+  return new Promise((resolve)=>{
+    const img = new Image();
+    img.onload = ()=>{
+      try{
+        const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0, w, h);
+        const out = canvas.toDataURL("image/jpeg", quality);
+        resolve(out.length < dataUrl.length ? out : dataUrl);
+      }catch(e){ resolve(dataUrl); }
+    };
+    img.onerror = ()=>resolve(dataUrl);   // เบราว์เซอร์ถอดรหัสไม่ได้ (เช่น HEIC) ส่งไฟล์เดิมไปตามปกติ
+    img.src = dataUrl;
+  });
+}
+
 function clearSelectedChatImage(){
   selectedImageDataUrl = null;
   chatImageInput.value = "";
@@ -545,6 +569,19 @@ function clearSelectedChatImage(){
 chatImageRemoveBtn.addEventListener("click", clearSelectedChatImage);
 
 addMsg("สวัสดีครับ ผมเป็นผู้ช่วย AI ของ Granite Design Advisor (ขับเคลื่อนด้วย Gemini) ถามเรื่องหินแกรนิต/หินอ่อนในระบบได้เลยครับ", "bot");
+
+// ส่งรูปแค่ "รูปล่าสุด" ไปกับทุกคำถามต่อเนื่อง — รูปเก่าตัดออก (คำตอบเดิมของ AI ยังอยู่ในบทสนทนา) ประหยัดแบนด์วิดท์และโควตา
+function messagesForRequest(history){
+  let lastImgIdx = -1;
+  history.forEach((m, i)=>{
+    if(Array.isArray(m.content) && m.content.some(p=>p.type === "image_url")) lastImgIdx = i;
+  });
+  return history.map((m, i)=>{
+    if(i === lastImgIdx || !Array.isArray(m.content)) return m;
+    const text = m.content.filter(p=>p.type === "text").map(p=>p.text).join("\n");
+    return { role: m.role, content: (text ? text + "\n" : "") + "[ผู้ใช้เคยแนบรูปในข้อความนี้]" };
+  });
+}
 
 async function sendChatMessage(userText, imageDataUrl){
   addMsg(userText || "(ส่งรูปภาพ)", "user", imageDataUrl);
@@ -570,7 +607,7 @@ async function sendChatMessage(userText, imageDataUrl){
     const res = await fetch(API_BASE + "/chat/completions/stream", {
       method:"POST",
       headers: chatHeaders,
-      body: JSON.stringify({ messages: chatHistory }),
+      body: JSON.stringify({ messages: messagesForRequest(chatHistory) }),
     });
 
     if(!res.ok || !res.body){

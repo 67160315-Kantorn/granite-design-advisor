@@ -388,8 +388,32 @@ def _messages_to_genai(messages: List[ChatMessage]) -> tuple:
     return system_instruction, contents
 
 
+# คำสั่งเพิ่มเมื่อผู้ใช้แนบรูปห้อง/พื้นที่ ให้ AI วิเคราะห์เป็นขั้นตอนและแนะนำจากแคตตาล็อกจริง
+IMAGE_GUIDE = (
+    "ผู้ใช้แนบรูปมาในข้อความล่าสุด ให้ทำตามลำดับนี้ ตอบเป็นภาษาไทยกระชับ:\n"
+    "1) สรุปสิ่งที่เห็นใน 1-2 บรรทัด: ประเภทห้อง/พื้นที่, โทนสีหลัก, สไตล์การตกแต่ง, แสงสว่าง, วัสดุเดิม (พื้น ผนัง ตู้)\n"
+    "2) แนะนำหินจากรายการด้านบน 2-3 ชนิด (พิมพ์ชื่อหินให้ตรงตามรายการทุกตัวอักษร) "
+    "แต่ละชนิดบอกเหตุผลที่เข้ากับห้องนี้ และราคา บาท/ตร.ม.\n"
+    "3) บอกว่าควรใช้กับส่วนไหนของห้อง (เช่น ท็อปครัว พื้น ผนัง) และข้อควรระวังสั้นๆ ถ้ามี\n"
+    "ถ้ารูปไม่ใช่ห้อง/พื้นที่ที่จะใช้หิน หรือมืด/เบลอจนดูไม่ออก ให้บอกตรงๆ แล้วขอรูปใหม่หรือถามความต้องการเพิ่ม "
+    "ห้ามแต่งรายละเอียดที่มองไม่เห็นในรูป และห้ามแนะนำหินที่ไม่มีในรายการ"
+)
+
+
+def _last_user_has_image(messages: List[ChatMessage]) -> bool:
+    for m in reversed(messages):
+        if m.role != "user":
+            continue
+        if isinstance(m.content, list):
+            return any(isinstance(i, dict) and i.get("type") == "image_url" for i in m.content)
+        return False
+    return False
+
+
 def _build_system_instruction(messages: List[ChatMessage]) -> tuple:
     products_context = _load_products_context()
+    if products_context and _last_user_has_image(messages):
+        products_context = f"{products_context}\n\n{IMAGE_GUIDE}"
     system_instruction, contents = _messages_to_genai(messages)
     if products_context:
         system_instruction = (
