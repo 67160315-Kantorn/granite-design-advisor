@@ -13,10 +13,11 @@ import logging
 import sys
 from pathlib import Path
 from typing import Optional
+from urllib.parse import quote
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 _project_root = Path(__file__).resolve().parent.parent
 if str(_project_root) not in sys.path:
@@ -24,6 +25,7 @@ if str(_project_root) not in sys.path:
 
 from scrape_granite import CSV_PATH, run_granite_scrape
 from database import SessionLocal
+from pdf_export import build_price_pdf
 from models import GraniteProduct
 
 logger = logging.getLogger(__name__)
@@ -194,3 +196,35 @@ def refresh_scrape():
     if not result.get("success"):
         raise HTTPException(status_code=502, detail=result.get("message", "Scrape failed"))
     return result
+
+
+class PricePdfRequest(BaseModel):
+    stone_type: str
+    width_m: float = Field(..., gt=0, le=1000)
+    length_m: float = Field(..., gt=0, le=1000)
+    finish_multiplier: float = Field(1.0, ge=0.5, le=3)
+    install_rate: float = Field(0, ge=0, le=100000, description="ค่าติดตั้งต่อ ตร.ม. (บาท)")
+
+
+@router.post("/pdf")
+def price_pdf(request: PricePdfRequest):
+    """สร้างใบประมาณราคาเป็น PDF (ภาษาไทยถูกต้อง) — ราคาหินอ่านจาก MySQL ไม่เชื่อค่าจากหน้าเว็บ
+    ไม่ต้อง login เหมือนหน้าคำนวณราคา"""
+    products = _load_products_db()
+    price = _get_stone_price_by_type(products, request.stone_type)
+    if price is None:
+        raise HTTPException(status_code=404, detail=f"ไม่พบประเภทหิน '{request.stone_type}' ในรายการ")
+    pdf_bytes = build_price_pdf(
+        stone_name=request.stone_type,
+        width_m=request.width_m,
+        length_m=request.length_m,
+        base_price_per_sqm=price,
+        finish_multiplier=request.finish_multiplier,
+        install_rate_per_sqm=request.install_rate,
+    )
+    filename = quote(f"ใบประมาณราคา-{request.stone_type}.pdf")
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=\"price-estimate.pdf\"; filename*=UTF-8''{filename}"},
+    )

@@ -253,3 +253,78 @@ def build_project_pdf(
                    new_x="LMARGIN", new_y="NEXT")
 
     return bytes(pdf.output())
+
+
+FINISH_LABEL = {1.0: "ขัดเงา (Polished)", 1.1: "ผิวด้าน (Honed) +10%", 1.2: "ผิวหยาบ (Leathered) +20%"}
+
+
+def build_price_pdf(
+    stone_name: str,
+    width_m: float,
+    length_m: float,
+    base_price_per_sqm: float,
+    finish_multiplier: float,
+    install_rate_per_sqm: float,
+) -> bytes:
+    """ใบประมาณราคา 1 หน้า — คำนวณตัวเลขซ้ำฝั่ง backend ให้ตรงกับสูตรในหน้าเว็บ
+    (ค่าวัสดุ = ราคา/ตร.ม. × ตัวคูณผิว × พื้นที่, ค่าติดตั้ง = อัตรา × พื้นที่, VAT 7%)"""
+    area = width_m * length_m
+    material = base_price_per_sqm * finish_multiplier * area
+    install = install_rate_per_sqm * area
+    subtotal = material + install
+    vat = subtotal * 0.07
+    total = subtotal + vat
+
+    pdf = _ProjectPDF()
+    pdf.alias_nb_pages()
+    pdf.add_page()
+
+    pdf.font(True, 9)
+    pdf.set_text_color(*GOLD)
+    pdf.cell(0, 5, pdf.t("GRANITE DESIGN ADVISOR  ·  ใบประมาณราคา"), new_x="LMARGIN", new_y="NEXT")
+    pdf.font(True, 22)
+    pdf.set_text_color(*DARK)
+    pdf.multi_cell(0, 11, pdf.t(stone_name), new_x="LMARGIN", new_y="NEXT")
+    pdf.font(size=10)
+    pdf.set_text_color(*GRAY)
+    pdf.cell(0, 6, pdf.t(f"ออกเมื่อ {_thai_date(datetime.now())}"), new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(2)
+    pdf.set_draw_color(*GOLD)
+    pdf.set_line_width(0.5)
+    pdf.line(pdf.l_margin, pdf.get_y(), pdf.w - pdf.r_margin, pdf.get_y())
+    pdf.ln(6)
+
+    finish = FINISH_LABEL.get(round(finish_multiplier, 2), f"ตัวคูณผิวสัมผัส ×{finish_multiplier:g}")
+    rows = [
+        ("หิน", stone_name, False),
+        ("ขนาดพื้นที่", f"{width_m:g} × {length_m:g} ม. = {area:.2f} ตร.ม.", False),
+        ("ราคาหิน/ตร.ม.", _baht(base_price_per_sqm), False),
+        ("ผิวสัมผัส", finish, False),
+        ("ค่าวัสดุ", _baht(material), False),
+        (f"ค่าติดตั้ง ({_baht(install_rate_per_sqm)}/ตร.ม.)", _baht(install), False),
+        ("รวมก่อน VAT", _baht(subtotal), False),
+        ("VAT 7%", _baht(vat), False),
+    ]
+    for lab, val, bold in rows:
+        pdf.font(bold, 11)
+        pdf.set_text_color(*GRAY)
+        pdf.cell(80, 8, pdf.t(lab))
+        pdf.set_text_color(*DARK)
+        pdf.cell(0, 8, pdf.t(val), align="R", new_x="LMARGIN", new_y="NEXT")
+        pdf.set_draw_color(225, 220, 210)
+        pdf.set_line_width(0.2)
+        pdf.line(pdf.l_margin, pdf.get_y(), pdf.w - pdf.r_margin, pdf.get_y())
+
+    pdf.ln(4)
+    pdf.font(True, 15)
+    pdf.set_text_color(*DARK)
+    pdf.cell(100, 11, pdf.t("ราคารวมโดยประมาณ"))
+    pdf.set_text_color(*GOLD)
+    pdf.cell(0, 11, pdf.t(_baht(total)), align="R", new_x="LMARGIN", new_y="NEXT")
+
+    pdf.ln(8)
+    pdf.font(size=9)
+    pdf.set_text_color(*GRAY)
+    pdf.multi_cell(0, 5, pdf.t("หมายเหตุ: ราคาทั้งหมดเป็นการประมาณการเบื้องต้นเท่านั้น ราคาจริงขึ้นกับผู้จำหน่ายและหน้างาน"),
+                   new_x="LMARGIN", new_y="NEXT")
+    return bytes(pdf.output())

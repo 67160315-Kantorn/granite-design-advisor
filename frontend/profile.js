@@ -81,6 +81,19 @@
         </div>
       </form>
 
+      <form id="gda-pw-form" autocomplete="off" style="margin-top:1.4rem; padding-top:1rem; border-top:1px solid var(--rule,#333);">
+        <label style="font-weight:600;">เปลี่ยนรหัสผ่าน</label>
+        <input type="password" id="gda-pw-current" placeholder="รหัสผ่านเดิม" autocomplete="current-password" required>
+        <input type="password" style="margin-top:0.5rem" id="gda-pw-new" placeholder="รหัสผ่านใหม่ (อย่างน้อย 8 ตัวอักษร)" minlength="8" autocomplete="new-password" required>
+        <input type="password" style="margin-top:0.5rem" id="gda-pw-confirm" placeholder="ยืนยันรหัสผ่านใหม่" minlength="8" autocomplete="new-password" required>
+        <div class="gda-error" id="gda-pw-error"></div>
+        <div class="gda-success" id="gda-pw-success"></div>
+        <div class="gda-actions">
+          <span></span>
+          <button type="submit" class="gda-auth-btn primary">เปลี่ยนรหัสผ่าน</button>
+        </div>
+      </form>
+
       <div class="gda-danger-zone">
         <p>⚠️ ลบบัญชีแล้วกู้คืนไม่ได้ โปรเจกต์และรายการทั้งหมดของคุณจะถูกลบไปด้วย</p>
         <button type="button" class="gda-btn-danger" id="gda-delete-account-btn">ลบบัญชีของฉัน</button>
@@ -93,6 +106,9 @@
   profileOverlay.addEventListener("click", (e) => { if (e.target === profileOverlay) closeProfileModal(); });
 
   function openProfileModal() {
+    document.getElementById("gda-pw-form").reset();
+    document.getElementById("gda-pw-error").textContent = "";
+    document.getElementById("gda-pw-success").textContent = "";
     profileOverlay.classList.add("open");
     loadProfile();
   }
@@ -115,6 +131,29 @@
     }
     return body;
   }
+
+  document.getElementById("gda-pw-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const errEl = document.getElementById("gda-pw-error");
+    const okEl = document.getElementById("gda-pw-success");
+    errEl.textContent = ""; okEl.textContent = "";
+    const cur = document.getElementById("gda-pw-current").value;
+    const nw = document.getElementById("gda-pw-new").value;
+    const cf = document.getElementById("gda-pw-confirm").value;
+    if (nw.length < 8) { errEl.textContent = "รหัสผ่านใหม่ต้องมีอย่างน้อย 8 ตัวอักษร"; return; }
+    if (nw !== cf) { errEl.textContent = "รหัสผ่านใหม่และช่องยืนยันไม่ตรงกัน"; return; }
+    if (nw === cur) { errEl.textContent = "รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสเดิม"; return; }
+    try {
+      await apiRequest("/auth/change-password", {
+        method: "POST",
+        body: JSON.stringify({ current_password: cur, new_password: nw }),
+      });
+      okEl.textContent = "เปลี่ยนรหัสผ่านสำเร็จ";
+      e.target.reset();
+    } catch (err) {
+      errEl.textContent = err.message;
+    }
+  });
 
   let currentProfileUser = null;
 

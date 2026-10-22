@@ -728,28 +728,39 @@ document.getElementById("price-form").addEventListener("submit", async (e)=>{
   `;
 });
 
-function exportPricePDF(){
+async function exportPricePDF(){
   if(!currentPriceResult) return;
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF();
   const q = currentPriceResult;
-  doc.setFontSize(16);
-  doc.text("Granite Design Advisor", 14, 18);
-  doc.setFontSize(11);
-  doc.text("ใบประมาณราคา — " + new Date().toLocaleString("th-TH"), 14, 28);
-  doc.line(14, 32, 196, 32);
-  let y = 42;
-  const rows = [
-    ["หิน", q.stone.name],
-    ["พื้นที่", q.width + " x " + q.length + " ม. = " + q.area.toFixed(2) + " ตร.ม."],
-    ["ค่าวัสดุ", "฿" + Math.round(q.materialCost).toLocaleString()],
-    ["ค่าติดตั้ง", "฿" + Math.round(q.installCost).toLocaleString()],
-    ["VAT 7%", "฿" + Math.round(q.vat).toLocaleString()],
-    ["รวมทั้งสิ้น", "฿" + Math.round(q.total).toLocaleString()],
-  ];
-  doc.setFontSize(10);
-  rows.forEach(r=>{ doc.text(r[0], 14, y); doc.text(r[1], 100, y); y += 8; });
-  doc.save("price-estimate.pdf");
+  // PDF สร้างฝั่ง backend (ฟอนต์ไทยครบ) — ส่งแค่ข้อมูลที่ผู้ใช้กรอก ราคาหินอ่านจากฐานข้อมูลฝั่ง server
+  try{
+    const res = await fetch(API_BASE + "/estimate/pdf", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({
+        stone_type: q.stone.name,
+        width_m: q.width,
+        length_m: q.length,
+        finish_multiplier: q.finishMultiplier,
+        install_rate: q.installRate,
+      }),
+    });
+    if(!res.ok){
+      let msg = `เกิดข้อผิดพลาด (${res.status})`;
+      try{ const body = await res.json(); if(body && body.detail) msg = typeof body.detail === "string" ? body.detail : msg; }catch(e){}
+      throw new Error(msg);
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `ใบประมาณราคา-${q.stone.name}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 10000);
+  }catch(err){
+    alert("Export PDF ไม่สำเร็จ: " + err.message);
+  }
 }
 window.exportPricePDF = exportPricePDF;
 
